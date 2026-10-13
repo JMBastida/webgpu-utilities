@@ -155,4 +155,20 @@ describe('translate image region grouping', () => {
       text: [30, 40, 50],
     });
   });
+
+  it('scales Tesseract font-size metadata with OCR coordinates for large images', () => {
+    // OCR processed a 1000px preview for a 2400px source image.
+    const [region] = buildRegions([
+      {
+        text: 'LARGE',
+        confidence: 0.9,
+        style: { fontSize: 20, weight: 'bold' },
+        boundingBox: { x: 100, y: 120, width: 130, height: 24 },
+      },
+    ], { sourceLang: 'en', scaleX: 2.4, scaleY: 2.4 });
+
+    expect(region?.bbox).toMatchObject({ x: 240, y: 288, width: 312 });
+    expect(region?.bbox.height).toBeCloseTo(57.6);
+    expect(region?.style?.fontSize).toBe(48);
+  });
 });

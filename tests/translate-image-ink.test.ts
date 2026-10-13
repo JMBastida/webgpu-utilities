@@ -70,12 +70,38 @@ describe('OCR ink mask', () => {
     expect(mask[5 * image.width + 20]).toBe(0);
   });
 
+  it('prefers original RGB ink over a grayscale OCR color hint', () => {
+    const image = createSurface(64, 32);
+    const item: OCRItem = {
+      text: 'SALE',
+      confidence: 1,
+      boundingBox: { x: 14, y: 8, width: 34, height: 16 },
+      style: { text: [80, 80, 80] },
+    };
+    for (let y = 12; y < 20; y += 1) {
+      for (const x of [20, 21, 22, 30, 31, 32]) paintPixel(image, x, y, [225, 35, 40]);
+    }
+
+    const { estimatedTextColors, fallbackItems } = rasterizeInkToMask(image, [item], {
+      x: 0,
+      y: 0,
+      width: image.width,
+      height: image.height,
+    });
+
+    expect(fallbackItems).toBe(0);
+    expect(estimatedTextColors[0]?.[0]).toBeGreaterThan(200);
+    expect(estimatedTextColors[0]?.[1]).toBeLessThan(60);
+    expect(estimatedTextColors[0]?.[2]).toBeLessThan(60);
+  });
+
   it('falls back to the OCR quad when a textured patch makes local contrast unreliable', () => {
     const image = createSurface(40, 30);
     const item: OCRItem = {
       text: 'x',
       confidence: 1,
       boundingBox: { x: 10, y: 8, width: 15, height: 12 },
+      style: { text: [80, 80, 80] },
     };
     for (let y = 0; y < image.height; y += 1) {
       for (let x = 0; x < image.width; x += 1) {
@@ -83,7 +109,7 @@ describe('OCR ink mask', () => {
       }
     }
 
-    const { mask, fallbackItems } = rasterizeInkToMask(image, [item], {
+    const { mask, fallbackItems, estimatedTextColors } = rasterizeInkToMask(image, [item], {
       x: 0,
       y: 0,
       width: image.width,
@@ -96,6 +122,42 @@ describe('OCR ink mask', () => {
     }, 0);
 
     expect(fallbackItems).toBe(1);
+    expect(estimatedTextColors[0]).toBeUndefined();
     expect(maskedInsideBox).toBe(15 * 12);
+  });
+
+  it('erases mixed-color lettering conservatively while keeping nearby decoration outside the OCR box', () => {
+    const image = createSurface(64, 32);
+    const item: OCRItem = {
+      text: 'SALE 50%',
+      confidence: 1,
+      boundingBox: { x: 14, y: 8, width: 34, height: 16 },
+    };
+    for (let y = 12; y < 20; y += 1) {
+      paintPixel(image, 19, y, [12, 12, 12]);
+      paintPixel(image, 31, y, [220, 30, 35]);
+    }
+    // A distinct red decoration sits just outside the OCR geometry.
+    paintPixel(image, 50, 16, [220, 30, 35]);
+
+    const { mask, fallbackItems } = rasterizeInkToMask(image, [item], {
+      x: 0,
+      y: 0,
+      width: image.width,
+      height: image.height,
+    });
+    let insideCount = 0;
+    for (let y = 8; y < 24; y += 1) {
+      for (let x = 14; x < 48; x += 1) insideCount += Number(mask[y * image.width + x] === 255);
+    }
+
+    expect(fallbackItems).toBe(1);
+    for (let y = 8; y < 24; y += 1) {
+      for (let x = 14; x < 48; x += 1) {
+        expect(mask[y * image.width + x]).toBe(255);
+      }
+    }
+    expect(insideCount).toBe(34 * 16);
+    expect(mask[16 * image.width + 50]).toBe(0);
   });
 });

@@ -52,6 +52,9 @@ const scaleItem = (item: OCRItem, scaleX: number, scaleY: number): OCRItem => ({
     height: item.boundingBox.height * scaleY,
   },
   quad: item.quad ? scaleQuad(item.quad, scaleX, scaleY) : undefined,
+  style: item.style?.fontSize !== undefined
+    ? { ...item.style, fontSize: item.style.fontSize * scaleY }
+    : item.style,
 });
 
 const median = (values: number[]): number => {

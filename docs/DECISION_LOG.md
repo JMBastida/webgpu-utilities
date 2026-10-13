@@ -5,12 +5,13 @@
 
 ### 2026-10-13: Keep text replacement local and conservative
 
-**Decision**: Use a locally inferred foreground mask where its color is consistent with text, and fall back to the OCR quad when the local surface is ambiguous. Use directional interpolation only on smooth or strongly directional surfaces; otherwise use local propagation fill. Bound replacement text sizing around the source size and show an actionable error when a translation cannot fit legibly.
+**Decision**: Use a locally inferred foreground mask where its color is consistent with text, and fall back to the OCR quad when the surface is ambiguous or multiple unexplained foreground hues are present. Use directional interpolation only on smooth or strongly directional surfaces; otherwise use local propagation fill. Scale OCR font metadata with image coordinates, measure the final font style against actual glyph bounds, preserve source cap height and baseline where text fits, and show an actionable error when a translation cannot fit at a source-relative minimum.
 
 **Rationale**:
 - Broad OCR-box erasure damages surrounding gradients and fine decoration.
 - Aggressive foreground segmentation mistakes textured backgrounds for ink, so mask confidence gates the narrower mask.
 - Translation length varies; readable bounds and an editable failure are preferable to silently tiny or clipped text.
+- The em-square/line-height estimate made short replacements visibly smaller than the source. Actual glyph bounds and baseline placement preserve hierarchy without imposing a fixed pixel-size floor.
 - This stays in-browser and avoids remote image processing, paid services, and model dependency for manual replacement.
 
 **Validation**: Synthetic fixtures cover flat, gradient/pinstripe, textured, rotated, and Japanese text. The textured fixture still shows local texture mismatch after glyph removal; exact restoration of arbitrary backgrounds is not claimed. See [translate-image documentation](TRANSLATE_IMAGE.md).

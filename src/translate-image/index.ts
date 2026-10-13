@@ -235,25 +235,26 @@ export const translateImage = async (
       ...item,
       style: {
         ...item.style,
-        ...(item.style?.text || !detectedInk.estimatedTextColors[index]
+        ...(!detectedInk.estimatedTextColors[index]
           ? {}
           : { text: detectedInk.estimatedTextColors[index] }),
       },
     }));
-    if (!region.style?.text) {
-      const colors = detectedInk.estimatedTextColors.filter(
-        (color): color is [number, number, number] => Boolean(color)
-      );
-      if (colors.length > 0) {
-        region.style = {
-          ...region.style,
-          text: [0, 1, 2].map((channel) =>
-            Math.round(
-              colors.reduce((total, color) => total + (color[channel] ?? 0), 0) / colors.length
-            )
-          ) as [number, number, number],
-        };
-      }
+    const colors = detectedInk.estimatedTextColors.filter(
+      (color): color is [number, number, number] => Boolean(color)
+    );
+    const { text: _ocrColorHint, ...regionStyleWithoutText } = region.style ?? {};
+    if (colors.length > 0) {
+      region.style = {
+        ...regionStyleWithoutText,
+        text: [0, 1, 2].map((channel) =>
+          Math.round(
+            colors.reduce((total, color) => total + (color[channel] ?? 0), 0) / colors.length
+          )
+        ) as [number, number, number],
+      };
+    } else {
+      region.style = regionStyleWithoutText;
     }
   }
   const dilation = quality === 'fast' ? 1 : quality === 'high-quality' ? 3 : 2;
@@ -414,7 +415,8 @@ export const translateImage = async (
       ? { width: regionBounds.width, height: regionBounds.height }
       : rectifiedQuadSize(region.quad);
     const sourceFontSize =
-      region.style?.fontSize ?? layoutSize.height / Math.max(1, region.sourceLineCount);
+      region.style?.fontSize ??
+      (layoutSize.height / Math.max(1, region.sourceLineCount)) / 0.72;
     const texture = prepareTexture(output, regionBounds);
     const avgLuma = texture.avgLuma;
     const styleText = region.style?.text;
@@ -441,8 +443,9 @@ export const translateImage = async (
       shadowOffsetY,
       fontWeight: region.style?.weight,
       fontStyle: region.style?.slant,
-      minFontSize: Math.max(14, Math.floor(sourceFontSize * 0.48)),
-      maxFontSize: Math.max(14, Math.ceil(sourceFontSize * 1.08)),
+      verticalAlign: layoutSize.height > sourceFontSize * 1.8 ? 'middle' : 'bottom',
+      minFontSize: Math.max(1, Math.floor(sourceFontSize * 0.48)),
+      maxFontSize: Math.max(1, Math.ceil(sourceFontSize)),
     });
 
     if (layout.shadowCanvas) {

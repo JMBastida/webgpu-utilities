@@ -3,6 +3,7 @@ import type { Bounds } from './mask';
 import type { RGB } from './types';
 
 type Color = [number, number, number];
+type InkPixel = { x: number; y: number; color: Color; residual: number };
 type InkMaskResult = {
   mask: Uint8ClampedArray;
   estimatedTextColors: Array<RGB | undefined>;
@@ -98,6 +99,14 @@ const backgroundModel = (
 const distance = (a: Color, b: Color): number =>
   Math.hypot(a[0] - b[0], a[1] - b[1], a[2] - b[2]);
 
+const chromaticityDistance = (a: Color, b: Color): number => {
+  const normalize = (color: Color): Color => {
+    const total = Math.max(1, color[0] + color[1] + color[2]);
+    return color.map((channel) => channel / total) as Color;
+  };
+  return distance(normalize(a), normalize(b));
+};
+
 /**
  * Removes only pixels that differ strongly from a locally interpolated background
  * around each OCR token. If the surrounding pixels do not describe a stable surface,
@@ -121,7 +130,7 @@ export const rasterizeInkToMask = (
     const y1 = clamp(Math.ceil(box.y + box.height), y0, image.height);
     const width = x1 - x0;
     const height = y1 - y0;
-    const inkPixels: Array<{ x: number; y: number; color: Color }> = [];
+    const inkPixels: InkPixel[] = [];
     const backgroundResiduals: number[] = [];
     const boxArea = Math.max(1, width * height);
     const estimateBackground = backgroundModel(image, { x0, y0, x1, y1 });
@@ -134,7 +143,7 @@ export const rasterizeInkToMask = (
         const current = colorAt(image, x, y);
         const residual = distance(current, background);
         backgroundResiduals.push(residual);
-        if (residual >= threshold) inkPixels.push({ x, y, color: current });
+        if (residual >= threshold) inkPixels.push({ x, y, color: current, residual });
       }
     }
 
@@ -146,11 +155,25 @@ export const rasterizeInkToMask = (
     const inkRatio = corePixels.length / boxArea;
     const consistentForeground =
       inkPixels.length === 0 || corePixels.length / inkPixels.length >= 0.55;
+    const strongestResidual = inkPixels.reduce((max, pixel) => Math.max(max, pixel.residual), 0);
+    const strongPixels = inkPixels.filter((pixel) =>
+      pixel.residual >= Math.max(threshold * 3, strongestResidual * 0.7)
+    );
+    const strongColor = [0, 1, 2].map((channel) =>
+      median(strongPixels.map((pixel) => pixel.color[channel] ?? 0))
+    ) as Color;
+    const offHuePixels = strongPixels.filter(
+      (pixel) => chromaticityDistance(pixel.color, strongColor) > 0.16
+    );
+    const mixedForeground =
+      offHuePixels.length >= Math.max(4, boxArea * 0.01) &&
+      offHuePixels.length / Math.max(1, strongPixels.length) >= 0.08;
     const trustworthy =
       corePixels.length >= 4 &&
       inkRatio >= 0.012 &&
       inkRatio <= 0.62 &&
       consistentForeground &&
+      !mixedForeground &&
       medianResidual < threshold;
     if (trustworthy) {
       for (const pixel of corePixels) {
@@ -160,10 +183,14 @@ export const rasterizeInkToMask = (
           mask[localY * bounds.width + localX] = 255;
         }
       }
-      estimatedTextColors.push(item.style?.text ?? candidateColor);
+      // Estimate from the original RGB pixels. Some OCR engines receive a
+      // grayscale preprocessing image, so their style hint can lose hue.
+      estimatedTextColors.push(candidateColor);
     } else {
       fallbackItems += 1;
-      estimatedTextColors.push(item.style?.text);
+      // A fallback means the original pixels did not support a reliable RGB
+      // estimate. Do not promote an OCR hint that may come from grayscale input.
+      estimatedTextColors.push(undefined);
       // Conservative fallback: erase the full OCR quad when local contrast is ambiguous.
       for (let y = Math.max(bounds.y, y0); y < Math.min(bounds.y + bounds.height, y1); y += 1) {
         for (let x = Math.max(bounds.x, x0); x < Math.min(bounds.x + bounds.width, x1); x += 1) {
