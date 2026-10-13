@@ -416,6 +416,10 @@ export function mapESearchResultToStandard(items: ESearchResultType): Array<{
   confidence: number;
   quad?: [[number, number], [number, number], [number, number], [number, number]];
   angle?: number;
+  style?: {
+    bg?: [number, number, number];
+    text?: [number, number, number];
+  };
   boundingBox: {
     x: number;
     y: number;
@@ -435,6 +439,12 @@ export function mapESearchResultToStandard(items: ESearchResultType): Array<{
     return {
       text: item.text,
       confidence: item.mean,
+      style: item.style
+        ? {
+            bg: item.style.bg,
+            text: item.style.text,
+          }
+        : undefined,
       quad: [
         [item.box[0][0], item.box[0][1]],
         [item.box[1][0], item.box[1][1]],

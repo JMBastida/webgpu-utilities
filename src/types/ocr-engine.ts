@@ -2,7 +2,14 @@ export interface OCRItem {
   text: string;
   confidence: number;
   quad?: [[number, number], [number, number], [number, number], [number, number]];
-  style?: { bg?: [number, number, number]; text?: [number, number, number] };
+  style?: {
+    bg?: [number, number, number];
+    text?: [number, number, number];
+    weight?: 'normal' | 'bold';
+    slant?: 'normal' | 'italic';
+    serif?: boolean;
+    fontSize?: number;
+  };
   angle?: number; // degrees, clockwise-positive in image coordinates
   lineId?: string;
   paragraphId?: string;

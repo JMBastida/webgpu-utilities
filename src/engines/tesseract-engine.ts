@@ -74,6 +74,12 @@ export class TesseractEngine implements IOCREngine {
       items: result.data.words?.map((word) => ({
         text: word.text,
         confidence: word.confidence / 100,
+        style: {
+          weight: word.is_bold ? 'bold' : 'normal',
+          slant: word.is_italic ? 'italic' : 'normal',
+          serif: word.is_serif,
+          fontSize: word.font_size > 0 ? word.font_size : undefined,
+        },
         lineId: idFor(word.line, 'line'),
         paragraphId: idFor(word.paragraph, 'paragraph'),
         blockId: idFor(word.block, 'block'),

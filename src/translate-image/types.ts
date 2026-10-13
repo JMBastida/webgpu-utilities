@@ -11,6 +11,10 @@ export type OCRQuad = [OCRPoint, OCRPoint, OCRPoint, OCRPoint];
 export interface OCRStyle {
   bg?: RGB;
   text?: RGB;
+  weight?: 'normal' | 'bold';
+  slant?: 'normal' | 'italic';
+  serif?: boolean;
+  fontSize?: number;
 }
 
 export interface Region {
@@ -62,6 +66,7 @@ export interface TranslateImageDebugStats {
   bounds: { x: number; y: number; width: number; height: number };
   rawMaskPixels: number;
   dilatedMaskPixels: number;
+  fallbackMaskItems: number;
 }
 
 export interface TranslateImageOutput {

@@ -180,6 +180,36 @@ describe('TesseractEngine unit tests', () => {
     });
   });
 
+  it('preserves word font metadata from Tesseract for writeback styling', async () => {
+    const worker = makeWorker();
+    worker.recognize.mockResolvedValueOnce({
+      data: {
+        text: 'Hello',
+        words: [{
+          text: 'Hello',
+          confidence: 90,
+          bbox: { x0: 10, y0: 20, x1: 55, y1: 35 },
+          is_bold: true,
+          is_italic: true,
+          is_serif: true,
+          font_size: 18,
+        }],
+      },
+    });
+    createWorkerMock.mockResolvedValueOnce(worker as unknown as ReturnType<typeof makeWorker>);
+
+    const engine = new TesseractEngine();
+    await engine.load();
+    const result = await engine.process(new ImageData(100, 80));
+
+    expect(result.items?.[0]?.style).toEqual({
+      weight: 'bold',
+      slant: 'italic',
+      serif: true,
+      fontSize: 18,
+    });
+  });
+
   it('destroys the worker on cleanup', async () => {
     const worker = makeWorker();
     createWorkerMock.mockResolvedValueOnce(worker as unknown as ReturnType<typeof makeWorker>);

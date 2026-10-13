@@ -127,4 +127,32 @@ describe('translate image region grouping', () => {
     expect(regions).toHaveLength(2);
     expect(regions.map((region) => region.sourceLines[0])).toEqual(['LEFT', 'RIGHT']);
   });
+
+  it('preserves majority font hints and source size across fragmented OCR words', () => {
+    const items: OCRItem[] = [
+      {
+        text: 'Bold',
+        confidence: 0.9,
+        style: { weight: 'bold', slant: 'normal', serif: true, fontSize: 24, text: [20, 30, 40] },
+        lineId: 'line-1',
+        boundingBox: { x: 10, y: 10, width: 40, height: 25 },
+      },
+      {
+        text: 'serif',
+        confidence: 0.9,
+        style: { weight: 'bold', slant: 'italic', serif: true, fontSize: 26, text: [40, 50, 60] },
+        lineId: 'line-1',
+        boundingBox: { x: 55, y: 10, width: 40, height: 25 },
+      },
+    ];
+
+    const [region] = buildRegions(items, { sourceLang: 'en', scaleX: 1, scaleY: 1 });
+
+    expect(region?.style).toMatchObject({
+      weight: 'bold',
+      serif: true,
+      fontSize: 25,
+      text: [30, 40, 50],
+    });
+  });
 });

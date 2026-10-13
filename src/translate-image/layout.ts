@@ -14,12 +14,12 @@ export interface TextLayoutResult {
   height: number;
 }
 
-const CJK_PREFIXES = ['zh', 'ja', 'ko'];
+const NO_SPACE_PREFIXES = ['zh', 'ja', 'ko', 'th', 'lo', 'km', 'my'];
 const RTL_PREFIXES = ['ar', 'he', 'fa', 'ur'];
 
-export const isCjkLanguage = (code: string): boolean => {
+export const isNoSpaceLanguage = (code: string): boolean => {
   const normalized = code.toLowerCase();
-  return CJK_PREFIXES.some(
+  return NO_SPACE_PREFIXES.some(
     (prefix) => normalized === prefix || normalized.startsWith(`${prefix}-`)
   );
 };
@@ -31,9 +31,21 @@ export const isRtlLanguage = (code: string): boolean => {
   );
 };
 
-export const getFontFamily = (code: string): string => {
+export const getFontFamily = (
+  code: string,
+  style?: { serif?: boolean }
+): string => {
   const normalized = code.toLowerCase();
   if (normalized.startsWith('ja') || normalized.startsWith('zh') || normalized.startsWith('ko')) {
+    if (style?.serif) {
+      return [
+        '"Noto Serif CJK"',
+        '"Noto Serif JP"',
+        '"Songti SC"',
+        '"Yu Mincho"',
+        'serif',
+      ].join(', ');
+    }
     return [
       '"Noto Sans CJK"',
       '"Noto Sans JP"',
@@ -46,14 +58,32 @@ export const getFontFamily = (code: string): string => {
   if (normalized.startsWith('ar')) {
     return '"Noto Naskh Arabic", "Amiri", "Scheherazade New", serif';
   }
+  if (style?.serif) return '"Noto Serif", Georgia, serif';
   return '"Inter", system-ui, -apple-system, "Segoe UI", Roboto, Arial, sans-serif';
+};
+
+const segmentNoSpaceText = (text: string, language: string): string[] => {
+  type Segment = { segment: string };
+  type SegmenterConstructor = new (
+    locale: string,
+    options: { granularity: 'word' }
+  ) => { segment: (input: string) => Iterable<Segment> };
+  const Segmenter = (Intl as unknown as { Segmenter?: SegmenterConstructor }).Segmenter;
+  if (Segmenter) {
+    return Array.from(
+      new Segmenter(language, { granularity: 'word' }).segment(text),
+      (part) => part.segment
+    ).filter((part) => part.trim().length > 0);
+  }
+  return Array.from(text);
 };
 
 export const wrapText = (
   text: string,
   maxWidth: number,
   context: Context2D,
-  isCjk: boolean
+  isCjk: boolean,
+  language = 'zh'
 ): string[] => {
   const rawLines = text.split(/\r?\n/);
   const lines: string[] = [];
@@ -64,11 +94,13 @@ export const wrapText = (
       lines.push('');
       continue;
     }
-    const tokens = isCjk ? Array.from(trimmed) : trimmed.split(/\s+/).filter(Boolean);
+    const tokens = isCjk
+      ? segmentNoSpaceText(trimmed, language)
+      : trimmed.split(/\s+/).filter(Boolean);
     let current = '';
     for (const originalToken of tokens) {
       const tokenWidth = context.measureText(originalToken).width;
-      const splitLongWord = !isCjk && tokenWidth > maxWidth;
+      const splitLongWord = tokenWidth > maxWidth;
       const tokenParts = splitLongWord ? Array.from(originalToken) : [originalToken];
       for (const [tokenIndex, token] of tokenParts.entries()) {
         const separator = isCjk || (splitLongWord && tokenIndex > 0) ? '' : ' ';
@@ -90,7 +122,7 @@ export const wrapText = (
   return lines;
 };
 
-const computeLayout = (options: {
+export const computeTextLayout = (options: {
   text: string;
   width: number;
   height: number;
@@ -99,19 +131,31 @@ const computeLayout = (options: {
   direction: TextDirection;
   targetLineCount: number;
   isCjk: boolean;
+  language?: string;
+  minFontSize?: number;
+  maxFontSize?: number;
 }): { lines: string[]; fontSize: number; lineHeight: number } => {
   const canvas = createCanvas(1, 1);
   const context = getContext2d(canvas);
   let bestLines: string[] = [];
-  let bestSize = 8;
   let bestPenalty = Infinity;
 
-  let low = 8;
-  let high = Math.max(8, Math.floor(options.height));
+  const minimum = Math.max(14, Math.floor(options.minFontSize ?? 14));
+  const maximum = Math.max(minimum, Math.min(Math.floor(options.height), options.maxFontSize ?? options.height));
+  let bestSize = minimum;
+  let low = minimum;
+  let high = maximum;
   for (let i = 0; i < 12; i += 1) {
-    const size = Math.max(8, Math.floor((low + high) / 2));
+    if (low > high) break;
+    const size = Math.max(minimum, Math.min(maximum, Math.floor((low + high) / 2)));
     context.font = `${size}px ${options.fontFamily}`;
-    const lines = wrapText(options.text, options.width * 0.98, context, options.isCjk);
+    const lines = wrapText(
+      options.text,
+      options.width * 0.98,
+      context,
+      options.isCjk,
+      options.language
+    );
     const lineHeight = size * 1.18;
     const height = lines.length * lineHeight;
     const width = lines.reduce((max, line) => Math.max(max, context.measureText(line).width), 0);
@@ -131,14 +175,22 @@ const computeLayout = (options: {
 
   if (bestLines.length === 0) {
     context.font = `${bestSize}px ${options.fontFamily}`;
-    bestLines = wrapText(options.text, options.width * 0.98, context, options.isCjk);
+    bestLines = wrapText(
+      options.text,
+      options.width * 0.98,
+      context,
+      options.isCjk,
+      options.language
+    );
     const height = bestLines.length * bestSize * 1.18;
     const width = bestLines.reduce(
       (max, line) => Math.max(max, context.measureText(line).width),
       0
     );
     if (width > options.width * 0.98 || height > options.height * 0.98) {
-      throw new Error('Translated text does not fit the detected text region.');
+      throw new Error(
+        'Translated text cannot fit this region at a readable size. Edit it shorter or add line breaks.'
+      );
     }
   }
 
@@ -163,20 +215,28 @@ export const renderTextMasks = (options: {
   direction: TextDirection;
   targetLineCount: number;
   isCjk: boolean;
+  language?: string;
+  fontWeight?: 'normal' | 'bold';
+  fontStyle?: 'normal' | 'italic';
+  minFontSize?: number;
+  maxFontSize?: number;
   shadowBlur: number;
   shadowOffsetX: number;
   shadowOffsetY: number;
 }): TextLayoutResult => {
-  const layout = computeLayout(options);
+  const layout = computeTextLayout(options);
   const textCanvas = createCanvas(options.width, options.height);
   const textContext = getContext2d(textCanvas);
   textContext.clearRect(0, 0, options.width, options.height);
   textContext.fillStyle = '#fff';
-  textContext.font = `${layout.fontSize}px ${options.fontFamily}`;
+  const fontStyle = options.fontStyle === 'italic' ? 'italic' : 'normal';
+  const fontWeight = options.fontWeight === 'bold' ? 'bold' : 'normal';
+  textContext.font = `${fontStyle} ${fontWeight} ${layout.fontSize}px ${options.fontFamily}`;
   textContext.textAlign = options.align;
   textContext.textBaseline = 'top';
   textContext.direction = options.direction;
-  textContext.filter = 'blur(0.4px)';
+  // Canvas glyph rasterization already antialiases text; an extra blur makes it look soft.
+  textContext.filter = 'none';
 
   const startX = options.align === 'right' ? options.width : 0;
   let cursorY = 0;
@@ -191,7 +251,7 @@ export const renderTextMasks = (options: {
     const base = createCanvas(options.width, options.height);
     const baseContext = getContext2d(base);
     baseContext.fillStyle = '#fff';
-    baseContext.font = `${layout.fontSize}px ${options.fontFamily}`;
+    baseContext.font = `${fontStyle} ${fontWeight} ${layout.fontSize}px ${options.fontFamily}`;
     baseContext.textAlign = options.align;
     baseContext.textBaseline = 'top';
     baseContext.direction = options.direction;

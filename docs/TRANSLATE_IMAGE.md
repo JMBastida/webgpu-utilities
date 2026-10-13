@@ -9,7 +9,7 @@ The OCR page can translate positioned OCR results and render them into a PNG in 
 3. After OCR, the editable fields are available immediately. Choose a rendering preset and select **Replace and translate** to fill them using the local translation model.
 4. Edit any region and select **Apply text edits** to rerender with your corrections, then download the PNG. Manual replacement works if model download fails or translated text does not fit.
 
-The output keeps the original image dimensions. Text is grouped into paragraphs, erased only around OCR boxes, and rendered into those same regions. The local TypeScript inpainting path does not require a paid service or optional native image library.
+The output keeps the original image dimensions. Text is grouped into paragraphs, erased around OCR geometry, and rendered into those regions. Where foreground ink is distinguishable from a locally interpolated surface, the eraser masks likely ink pixels and keeps nearby decoration; when that estimate is ambiguous it conservatively erases the OCR quad. The local TypeScript inpainting path does not require a paid service or optional native image library.
 
 ## Model access
 
@@ -19,11 +19,13 @@ The project can also serve Tesseract language data from its own origin by settin
 
 ## Rendering presets
 
-- **Fast** fills each masked text region with the average color around that region. It is quickest and works best on flat backgrounds.
-- **Balanced** propagates nearby unmasked pixels into the mask and smooths the fill. This is the default.
-- **High quality** uses a wider erase mask and a stronger text halo to improve legibility. It takes more processing and can erase a wider border around the detected text.
+- **Fast** uses the lightweight local fill and a one-pixel mask expansion.
+- **Balanced** (default) uses local directional interpolation when the surface supports it, otherwise local propagation and smoothing; it expands the mask by two pixels.
+- **High quality** uses the same local fill choices with a three-pixel mask expansion. It takes more processing.
 
-All presets are local. The algorithm does not reconstruct arbitrary scenery or guarantee a font match. Text is fitted to a rectangular paragraph region; a single OCR item with a quadrilateral keeps that geometry for placement. Long translations that cannot fit at the minimum supported font size fail with an explicit message instead of being silently clipped. Rotated multi-line paragraphs, curved surfaces, decorative fonts, and exact background reconstruction are not supported claims.
+All presets are local. The algorithm does not reconstruct arbitrary scenery or guarantee a font match. Tesseract font hints and eSearch source colors are retained when available; otherwise the text color is inferred only when foreground-color consistency is strong. Text is fitted to the detected rectangular paragraph region, with a single OCR item quadrilateral retaining its geometry for placement. Source font size is a guide: expansion is capped and contraction stops at a readable minimum. Long translations that cannot fit at that minimum fail with an explicit message instead of being silently clipped. Rotated multi-line paragraphs, curved surfaces, decorative fonts, and exact background reconstruction are not supported claims.
+
+Synthetic local fixtures cover flat, gradient-with-pinstripes, textured, rotated, and Japanese-script content. Erasure matched the known clean flat fixture exactly; the gradient, rotated, and Japanese cases had low whole-image pixel error. On textured backgrounds the local inpainting still changes texture inside glyph strokes and may leave a faint surface mismatch. These results describe the checked fixtures, not arbitrary images. [Fixture comparison](translate-image-quality.png) shows the clean surface, original, output, and amplified erasure difference.
 
 ## Validation
 

@@ -20,7 +20,7 @@ type Line = {
   paragraphId?: string;
 };
 
-const CJK_PREFIXES = ['zh', 'ja', 'ko'];
+const CJK_PREFIXES = ['zh', 'ja', 'ko', 'th', 'lo', 'km', 'my'];
 
 const isCjkLanguage = (code: string): boolean => {
   const normalized = code.toLowerCase();
@@ -114,6 +114,14 @@ const averageStyle = (items: OCRItem[], key: 'text' | 'bg'): OCRStyle | undefine
     Math.round(sum[2] / colors.length),
   ];
   return { [key]: avg };
+};
+
+const majorityStyle = <T extends string | boolean>(values: Array<T | undefined>): T | undefined => {
+  const counts = new Map<T, number>();
+  for (const value of values) {
+    if (value !== undefined) counts.set(value, (counts.get(value) ?? 0) + 1);
+  }
+  return [...counts.entries()].sort((a, b) => b[1] - a[1])[0]?.[0];
 };
 
 export const buildRegions = (
@@ -254,9 +262,24 @@ export const buildRegions = (
     const regionItems = groupTokens.map((token) => token.item);
     const styleText = averageStyle(regionItems, 'text');
     const styleBg = averageStyle(regionItems, 'bg');
+    const weight = majorityStyle(regionItems.map((item) => item.style?.weight));
+    const slant = majorityStyle(regionItems.map((item) => item.style?.slant));
+    const serif = majorityStyle(regionItems.map((item) => item.style?.serif));
+    const fontSizes = regionItems
+      .map((item) => item.style?.fontSize)
+      .filter((size): size is number => typeof size === 'number' && Number.isFinite(size) && size > 0);
     let style: OCRStyle | undefined;
-    if (styleText || styleBg) {
-      style = { ...(styleText ?? {}), ...(styleBg ?? {}) };
+    if (styleText || styleBg || weight || slant || serif !== undefined || fontSizes.length > 0) {
+      style = {
+        ...(styleText ?? {}),
+        ...(styleBg ?? {}),
+        ...(weight ? { weight } : {}),
+        ...(slant ? { slant } : {}),
+        ...(serif !== undefined ? { serif } : {}),
+        ...(fontSizes.length > 0
+          ? { fontSize: median(fontSizes) }
+          : {}),
+      };
     }
     const singleItemQuad = regionItems.length === 1 ? regionItems[0]?.quad : undefined;
     const quad: OCRQuad = singleItemQuad

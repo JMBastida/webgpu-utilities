@@ -109,6 +109,49 @@ describe('inpaint fallback', () => {
     expect(Array.from(result.data.slice(untouchedIndex, untouchedIndex + 4))).toEqual([120, 140, 160, 255]);
   });
 
+  it.each(['fast', 'balanced', 'high-quality'] as const)(
+    'continues a smooth gradient through a small lettering mask and preserves all other pixels (%s)',
+    async (quality) => {
+      const clean = createImage(24, 20, [0, 0, 0, 255]);
+      for (let y = 0; y < clean.height; y += 1) {
+        for (let x = 0; x < clean.width; x += 1) {
+          const index = (y * clean.width + x) * 4;
+          clean.data[index] = 40 + x * 3;
+          clean.data[index + 1] = 50 + y * 4;
+          clean.data[index + 2] = 80 + x + y * 2;
+        }
+      }
+      const source = new ImageData(new Uint8ClampedArray(clean.data), clean.width, clean.height);
+      const bounds: Bounds = { x: 5, y: 4, width: 14, height: 12 };
+      const mask = new Uint8ClampedArray(bounds.width * bounds.height);
+      for (let y = 2; y < 9; y += 1) {
+        for (let x = 5; x < 8; x += 1) {
+          mask[y * bounds.width + x] = 255;
+          const index = ((bounds.y + y) * source.width + bounds.x + x) * 4;
+          source.data.set([0, 0, 0, 255], index);
+        }
+      }
+
+      const result = await inpaintImage(source, mask, bounds, { quality });
+      if (quality === 'fast') {
+        for (let y = 0; y < source.height; y += 1) {
+          for (let x = 0; x < source.width; x += 1) {
+            if (x >= bounds.x && x < bounds.x + bounds.width && y >= bounds.y && y < bounds.y + bounds.height) {
+              const local = (y - bounds.y) * bounds.width + x - bounds.x;
+              if (mask[local]) continue;
+            }
+            const index = (y * source.width + x) * 4;
+            expect(Array.from(result.data.slice(index, index + 4))).toEqual(
+              Array.from(clean.data.slice(index, index + 4))
+            );
+          }
+        }
+      } else {
+        expect(Array.from(result.data)).toEqual(Array.from(clean.data));
+      }
+    }
+  );
+
   it.each(['balanced', 'high-quality'] as const)(
     'expands a fully masked crop to use a real source margin (%s)',
     async (quality) => {

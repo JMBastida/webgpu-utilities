@@ -7,10 +7,11 @@ import type {
   TranslateImageOutput,
 } from './types';
 import { buildRegions } from './regions';
-import { unionItemBounds, rasterizeItemsToMask, dilateMask } from './mask';
+import { unionItemBounds, dilateMask } from './mask';
+import { rasterizeInkToMask } from './ink';
 import type { Bounds } from './mask';
 import { inpaintImage } from './inpaint';
-import { getFontFamily, isCjkLanguage, isRtlLanguage, renderTextMasks } from './layout';
+import { getFontFamily, isNoSpaceLanguage, isRtlLanguage, renderTextMasks } from './layout';
 import { blendLayer, prepareTexture } from './blend';
 import { createCanvas, getContext2d } from './canvas';
 import { isRectQuad, rectifiedQuadSize, warpMaskToQuad } from './warp';
@@ -34,7 +35,6 @@ const normalizeBounds = (
   const maxY = clamp(Math.ceil(bbox.y + bbox.height), y + 1, imageHeight);
   return { x, y, width: maxX - x, height: maxY - y };
 };
-
 const hasToBlob = (canvas: HTMLCanvasElement | OffscreenCanvas): canvas is HTMLCanvasElement =>
   typeof (canvas as HTMLCanvasElement).toBlob === 'function';
 
@@ -225,14 +225,38 @@ export const translateImage = async (
 
   const padding = 16;
   const quality = options.quality ?? 'balanced';
-  const dilation = clamp(
-    Math.round(
-      (quality === 'fast' ? 0.025 : quality === 'high-quality' ? 0.075 : 0.05) *
-        medianValue(eraseRegions.map((region) => Math.min(region.bbox.width, region.bbox.height)))
-    ) + 1,
-    quality === 'fast' ? 1 : 3,
-    quality === 'high-quality' ? 20 : 16
-  );
+  let fallbackMaskItems = 0;
+  for (const region of eraseRegions) {
+    const styleBounds = unionItemBounds(region.items, input.original.width, input.original.height, 0);
+    if (!styleBounds) continue;
+    const detectedInk = rasterizeInkToMask(input.original, region.items, styleBounds);
+    fallbackMaskItems += detectedInk.fallbackItems;
+    region.items = region.items.map((item, index) => ({
+      ...item,
+      style: {
+        ...item.style,
+        ...(item.style?.text || !detectedInk.estimatedTextColors[index]
+          ? {}
+          : { text: detectedInk.estimatedTextColors[index] }),
+      },
+    }));
+    if (!region.style?.text) {
+      const colors = detectedInk.estimatedTextColors.filter(
+        (color): color is [number, number, number] => Boolean(color)
+      );
+      if (colors.length > 0) {
+        region.style = {
+          ...region.style,
+          text: [0, 1, 2].map((channel) =>
+            Math.round(
+              colors.reduce((total, color) => total + (color[channel] ?? 0), 0) / colors.length
+            )
+          ) as [number, number, number],
+        };
+      }
+    }
+  }
+  const dilation = quality === 'fast' ? 1 : quality === 'high-quality' ? 3 : 2;
   const activeItems = eraseRegions.flatMap((region) => region.items);
   const inpaintOptions = {
     ...options.inpaint,
@@ -261,7 +285,7 @@ export const translateImage = async (
     if (!bounds) {
       throw new Error('Unable to compute translation bounds.');
     }
-    const rawMask = rasterizeItemsToMask(activeItems, bounds);
+    const rawMask = rasterizeInkToMask(input.original, activeItems, bounds).mask;
     const mask = dilateMask(rawMask, bounds.width, bounds.height, dilation);
     const rawMaskPixels = countMaskPixels(rawMask);
     const dilatedMaskPixels = countMaskPixels(mask);
@@ -287,6 +311,7 @@ export const translateImage = async (
       bounds,
       rawMaskPixels,
       dilatedMaskPixels,
+      fallbackMaskItems,
     };
     await pushStep(
       'Mask (raw)',
@@ -315,7 +340,7 @@ export const translateImage = async (
       padding
     );
     if (!groupBounds) continue;
-    const groupRawMask = rasterizeItemsToMask(groupItems, groupBounds);
+    const groupRawMask = rasterizeInkToMask(input.original, groupItems, groupBounds).mask;
     const groupMask = dilateMask(groupRawMask, groupBounds.width, groupBounds.height, dilation);
     const groupMaskPixels = countMaskPixels(groupRawMask);
     const groupArea = groupBounds.width * groupBounds.height;
@@ -351,7 +376,7 @@ export const translateImage = async (
         padding
       );
       if (!regionBounds) continue;
-      const regionRawMask = rasterizeItemsToMask(regionItems, regionBounds);
+      const regionRawMask = rasterizeInkToMask(input.original, regionItems, regionBounds).mask;
       const regionMask = dilateMask(
         regionRawMask,
         regionBounds.width,
@@ -378,23 +403,26 @@ export const translateImage = async (
   if (debugEnabled) {
     await pushStep('Background (final)', output);
   }
-  const targetFontFamily = getFontFamily(input.to);
   const rtl = isRtlLanguage(input.to);
   const alignment = rtl ? 'right' : 'left';
-  const useCjkWrap = isCjkLanguage(input.to);
+  const useCjkWrap = isNoSpaceLanguage(input.to);
 
   for (const region of activeRegions) {
+    const targetFontFamily = getFontFamily(input.to, region.style);
     const regionBounds = normalizeBounds(region.bbox, output.width, output.height);
     const layoutSize = isRectQuad(region.quad, regionBounds)
       ? { width: regionBounds.width, height: regionBounds.height }
       : rectifiedQuadSize(region.quad);
+    const sourceFontSize =
+      region.style?.fontSize ?? layoutSize.height / Math.max(1, region.sourceLineCount);
     const texture = prepareTexture(output, regionBounds);
     const avgLuma = texture.avgLuma;
     const styleText = region.style?.text;
     const textColor = styleText ?? chooseTextColor(avgLuma);
     const textIsDark = luma(textColor[0], textColor[1], textColor[2]) < 128;
     const shadowColor: [number, number, number] = textIsDark ? [255, 255, 255] : [0, 0, 0];
-    const shadowBlur = quality === 'high-quality' ? 1.4 : quality === 'fast' ? 0 : 1.0;
+    // OCR providers do not report whether source text had an outline; avoid adding one by default.
+    const shadowBlur = 0;
     const shadowOffsetX = 0;
     const shadowOffsetY = 0;
 
@@ -407,9 +435,14 @@ export const translateImage = async (
       direction: rtl ? 'rtl' : 'ltr',
       targetLineCount: region.sourceLineCount,
       isCjk: useCjkWrap,
+      language: input.to,
       shadowBlur,
       shadowOffsetX,
       shadowOffsetY,
+      fontWeight: region.style?.weight,
+      fontStyle: region.style?.slant,
+      minFontSize: Math.max(14, Math.floor(sourceFontSize * 0.48)),
+      maxFontSize: Math.max(14, Math.ceil(sourceFontSize * 1.08)),
     });
 
     if (layout.shadowCanvas) {
@@ -488,11 +521,4 @@ export const translateImage = async (
       ? { regions: activeRegions, steps: debugSteps, stats: debugStats }
       : undefined,
   };
-};
-
-const medianValue = (values: number[]): number => {
-  if (values.length === 0) return 12;
-  const sorted = [...values].sort((a, b) => a - b);
-  const middle = Math.floor(sorted.length / 2);
-  return sorted.length % 2 === 0 ? (sorted[middle - 1]! + sorted[middle]!) / 2 : sorted[middle]!;
 };
