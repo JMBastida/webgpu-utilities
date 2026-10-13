@@ -676,6 +676,7 @@ describe('mapESearchResultToStandard utility', () => {
     expect(result[0]).toEqual({
       text: 'Test',
       confidence: 0.95,
+      style: { bg: [255, 255, 255], text: [0, 0, 0] },
       quad: [[10, 20], [110, 20], [110, 40], [10, 40]],
       angle: 0,
       boundingBox: {

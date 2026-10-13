@@ -15,7 +15,7 @@ A high-performance, multi-engine OCR (Optical Character Recognition) system that
   - **eSearch-OCR (PaddleOCR)**: High-speed, high-accuracy engine optimized for Chinese/English mixed text.
   - **EasyOCR.js**: EasyOCR models running locally with ONNX Runtime.
 - **🌍 Local Translation**: Translate extracted text instantly using **Bergamot** (the engine behind Firefox Translations), keeping everything 100% private and on-device.
-- **🖼️ Write-Back Quality Presets**: Choose `fast`, `balanced`, or `high-quality` translated image rendering modes based on speed vs visual fidelity.
+- **🖼️ Translate text in images**: Replace positioned OCR text with local Bergamot translations and download a PNG. Choose `fast`, `balanced`, or `high-quality` rendering; see [image translation notes](docs/TRANSLATE_IMAGE.md) for limits.
 - **🔋 Performance Optimized**: Uses WebAssembly (WASM), Web Workers, and WebGPU acceleration for near-native speeds.
 - **📦 Intelligent Caching**: Heavy model files are cached in **IndexedDB** for instant subsequent loads.
 - **🎨 Glassmorphism UI**: A modern, clean interface with drag-and-drop, URL, and paste support.

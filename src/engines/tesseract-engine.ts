@@ -33,8 +33,12 @@ export class TesseractEngine implements IOCREngine {
 
     this.isLoading = true;
     try {
+      const baseUrl = import.meta.env.BASE_URL ?? '/';
       this.worker = await createWorker(this.language, 1, {
-        cacheMethod: 'refresh',
+        workerPath: new URL(`${baseUrl}tesseract/worker.min.js`, window.location.origin).toString(),
+        corePath: new URL(`${baseUrl}tesseract-core/`, window.location.origin).toString(),
+        langPath: import.meta.env.VITE_TESSERACT_LANG_PATH,
+        cacheMethod: 'write',
         cachePath: '.',
         logger: (message) => {
           if (this.onProgress) {
@@ -54,11 +58,31 @@ export class TesseractEngine implements IOCREngine {
 
     const blob = await this.imageDataToBlob(data);
     const result = await this.worker.recognize(blob);
+    const identities = new WeakMap<object, number>();
+    let nextIdentity = 1;
+    const idFor = (value: object | undefined, prefix: string): string | undefined => {
+      if (!value) return undefined;
+      let id = identities.get(value);
+      if (!id) {
+        id = nextIdentity++;
+        identities.set(value, id);
+      }
+      return `${prefix}-${id}`;
+    };
     return {
       text: result.data.text ?? '',
       items: result.data.words?.map((word) => ({
         text: word.text,
         confidence: word.confidence / 100,
+        style: {
+          weight: word.is_bold ? 'bold' : 'normal',
+          slant: word.is_italic ? 'italic' : 'normal',
+          serif: word.is_serif,
+          fontSize: word.font_size > 0 ? word.font_size : undefined,
+        },
+        lineId: idFor(word.line, 'line'),
+        paragraphId: idFor(word.paragraph, 'paragraph'),
+        blockId: idFor(word.block, 'block'),
         boundingBox: {
           x: word.bbox.x0,
           y: word.bbox.y0,

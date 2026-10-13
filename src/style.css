@@ -185,6 +185,40 @@ p {
   border-top: 1px solid rgba(26, 26, 26, 0.08);
 }
 
+.image-compare {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.preview-card {
+  min-width: 0;
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: rgba(255, 255, 255, 0.55);
+}
+
+.preview-label {
+  margin-bottom: 8px;
+  color: var(--ink-2);
+  font-size: 0.8rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.preview-card .preview-wrapper {
+  display: flex;
+  justify-content: center;
+  width: 100%;
+}
+
+.preview-card .image-preview {
+  max-height: 320px;
+  object-fit: contain;
+}
+
 .translate-header {
   display: flex;
   justify-content: space-between;
@@ -200,9 +234,21 @@ p {
 
 .translate-controls {
   display: grid;
-  grid-template-columns: 1fr auto 1fr auto;
+  grid-template-columns: repeat(3, minmax(110px, 1fr)) auto auto;
   gap: 12px;
   align-items: end;
+}
+
+@media (max-width: 900px) {
+  .translate-controls {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 560px) {
+  .image-compare {
+    grid-template-columns: 1fr;
+  }
 }
 
 .translate-select label {
@@ -224,7 +270,6 @@ p {
   background: #fff;
   font-family: inherit;
 }
-
 
 .translate-textarea {
   width: 100%;
@@ -248,6 +293,33 @@ p {
 .translate-status {
   font-size: 0.85rem;
   color: var(--ink-2);
+}
+
+.translate-image-editor {
+  display: grid;
+  gap: 0.75rem;
+  margin-top: 0.75rem;
+}
+
+.translate-image-editor-row {
+  display: grid;
+  gap: 0.35rem;
+}
+
+.translate-image-editor-row label {
+  color: var(--ink-2);
+  font-size: 0.875rem;
+}
+
+.translate-image-editor-row textarea {
+  width: 100%;
+  resize: vertical;
+  border: 1px solid var(--border);
+  border-radius: 0.5rem;
+  padding: 0.65rem;
+  color: var(--ink-1);
+  background: var(--card);
+  font: inherit;
 }
 
 .translate-error {
