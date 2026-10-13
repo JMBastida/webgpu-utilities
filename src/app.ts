@@ -17,6 +17,14 @@ import { getAppElements } from '@/app-elements';
 import { drawOcrBoxes } from '@/overlay-renderer';
 import { createEngineUiController } from '@/engine-ui';
 import { createImageSourceController } from '@/image-sources';
+import type { ITextTranslator } from '@/types/translation';
+import { BERGAMOT_LANGUAGES, DEFAULT_TRANSLATION_TO } from '@/utils/translation-languages';
+import { mapOcrLanguageToBergamot } from '@/utils/ocr-language-to-bergamot';
+import type {
+  TranslateImageInput,
+  TranslateImageOptions,
+  TranslateImageOutput,
+} from '@/translate-image/types';
 
 type Stage = 'idle' | 'loading' | 'processing' | 'complete' | 'error';
 
@@ -26,6 +34,11 @@ export interface AppOptions {
   imageProcessor?: ImageProcessor;
   engineFactory?: EngineFactory;
   ocrManager?: OCRManager;
+  createTranslator?: () => Promise<ITextTranslator>;
+  translateImageImpl?: (
+    input: TranslateImageInput,
+    options?: TranslateImageOptions
+  ) => Promise<TranslateImageOutput>;
   registerEngines?: (
     factory: EngineFactory,
     setStage: (stage: Stage, message: string, progress?: number) => void
@@ -96,6 +109,16 @@ export const initApp = (options: AppOptions = {}): AppInstance => {
     copyOutputButton,
     methodTabs,
     methodPanels,
+    translateImageFrom,
+    translateImageTo,
+    translateImageQuality,
+    translateImageRunButton,
+    translateImageDownloadButton,
+    translateImageStatus,
+    translateImageError,
+    replaceOriginalPreview,
+    translateImagePreview,
+    translateImageResult,
   } = getAppElements(root);
 
   const detector = options.featureDetector ?? new FeatureDetector();
@@ -118,6 +141,83 @@ export const initApp = (options: AppOptions = {}): AppInstance => {
   let lastResult: OCRResult | null = null;
   let lastProcessedWidth: number = 0;
   let lastProcessedHeight: number = 0;
+  let originalImageData: ImageData | null = null;
+  let sourceGeneration = 0;
+  let translator: ITextTranslator | null = null;
+  let translatorPromise: Promise<ITextTranslator> | null = null;
+  let translatedImageUrl: string | null = null;
+  let translateTaskGeneration = 0;
+  let translateBusy = false;
+
+  const createTranslator: () => Promise<ITextTranslator> =
+    options.createTranslator ??
+    (async (): Promise<ITextTranslator> => {
+      const { BergamotTextTranslator } = await import('@/translation/bergamot-translator');
+      return new BergamotTextTranslator();
+    });
+  const translateImage =
+    options.translateImageImpl ??
+    (async (
+      input: TranslateImageInput,
+      translateOptions?: TranslateImageOptions
+    ): Promise<TranslateImageOutput> => {
+      const { translateImage: runTranslateImage } = await import('@/translate-image');
+      return runTranslateImage(input, translateOptions);
+    });
+
+  for (const [code, label] of Object.entries(BERGAMOT_LANGUAGES)) {
+    const fromOption = document.createElement('option');
+    fromOption.value = code;
+    fromOption.textContent = label;
+    translateImageFrom.append(fromOption);
+    const toOption = fromOption.cloneNode(true) as HTMLOptionElement;
+    translateImageTo.append(toOption);
+  }
+  translateImageFrom.value = 'en';
+  translateImageTo.value = DEFAULT_TRANSLATION_TO;
+
+  const clearTranslatedImage = (): void => {
+    if (translatedImageUrl) URL.revokeObjectURL(translatedImageUrl);
+    translatedImageUrl = null;
+    translateImagePreview.removeAttribute('src');
+    translateImageResult.classList.add('hidden');
+    translateImageDownloadButton.disabled = true;
+  };
+
+  const resetTranslateImage = (status = 'Run OCR to enable image replacement.'): void => {
+    translateTaskGeneration += 1;
+    translateBusy = false;
+    clearTranslatedImage();
+    translateImageRunButton.disabled = true;
+    translateImageStatus.textContent = status;
+    translateImageError.textContent = '';
+    translateImageError.classList.add('hidden');
+  };
+
+  const refreshTranslateImageAvailability = (): void => {
+    translateImageRunButton.disabled =
+      translateBusy ||
+      !lastResult?.items?.length ||
+      !originalImageData ||
+      !lastProcessedWidth ||
+      !lastProcessedHeight;
+  };
+
+  const getTranslator = async (): Promise<ITextTranslator> => {
+    if (translator) return translator;
+    if (!translatorPromise) {
+      translatorPromise = createTranslator()
+        .then((created) => {
+          translator = created;
+          return created;
+        })
+        .catch((error: unknown) => {
+          translatorPromise = null;
+          throw error;
+        });
+    }
+    return translatorPromise;
+  };
 
   createImageSourceController(
     {
@@ -136,14 +236,27 @@ export const initApp = (options: AppOptions = {}): AppInstance => {
       setError: (error) => setError(createInvalidImageError(formatErrorMessage(error).message)),
       onLoadImage: (source) => {
         selectedSource = source;
+        replaceOriginalPreview.src = imagePreview.src;
       },
       onClearImage: () => {
         selectedSource = null;
+        sourceGeneration += 1;
+        lastResult = null;
+        originalImageData = null;
+        lastProcessedWidth = 0;
+        lastProcessedHeight = 0;
+        resetTranslateImage();
+        replaceOriginalPreview.removeAttribute('src');
       },
       onPreviewLoaded: () => undefined,
       onResetForNewSource: () => {
+        sourceGeneration += 1;
         ocrOverlay.innerHTML = '';
         lastResult = null;
+        originalImageData = null;
+        lastProcessedWidth = 0;
+        lastProcessedHeight = 0;
+        resetTranslateImage();
         copyOutputButton.classList.add('hidden');
       },
     }
@@ -261,7 +374,6 @@ export const initApp = (options: AppOptions = {}): AppInstance => {
     }
   };
 
-
   const updateLanguageSelection = (engineId: string): void => {
     engineUi.updateLanguageSelection(engineId);
   };
@@ -321,8 +433,12 @@ export const initApp = (options: AppOptions = {}): AppInstance => {
     setStage('idle', 'Ready for upload', 0);
   }
 
-
   engineSelect.addEventListener('change', (): void => {
+    sourceGeneration += 1;
+    lastResult = null;
+    lastProcessedWidth = 0;
+    lastProcessedHeight = 0;
+    resetTranslateImage('Run OCR again to use the selected engine.');
     selectedEngineId = engineSelect.value;
     engineReady = false;
     activeEngineId = null;
@@ -338,6 +454,11 @@ export const initApp = (options: AppOptions = {}): AppInstance => {
     }
 
     selectedLanguages[selectedEngineId] = languageSelect.value;
+    sourceGeneration += 1;
+    lastResult = null;
+    lastProcessedWidth = 0;
+    lastProcessedHeight = 0;
+    resetTranslateImage('Run OCR again to use the selected language.');
     engineReady = false;
     activeLanguage = null;
     engineUi.updateLanguageHint(selectedEngineId);
@@ -355,6 +476,8 @@ export const initApp = (options: AppOptions = {}): AppInstance => {
       return;
     }
 
+    const operationGeneration = sourceGeneration;
+    resetTranslateImage('OCR is running…');
     setBusy(true);
     try {
       if (!selectedEngineId) {
@@ -374,14 +497,36 @@ export const initApp = (options: AppOptions = {}): AppInstance => {
 
       setStage('processing', 'Processing image...', 100);
       const imageData = await imageProcessor.sourceToImageData(selectedSource);
+      if (operationGeneration !== sourceGeneration) return;
+      originalImageData = imageData;
       const resized = imageProcessor.resize(imageData, 2000);
       const processed = imageProcessor.preprocess(resized);
       const processStart = performance.now();
       const result = await ocrManager.run(processed);
+      if (operationGeneration !== sourceGeneration) return;
       setProcessMetric(performance.now() - processStart);
       lastResult = result;
       lastProcessedWidth = processed.width;
       lastProcessedHeight = processed.height;
+      const inferredFrom =
+        selectedEngineId && engineUi.supportsLanguageSelection(selectedEngineId)
+          ? mapOcrLanguageToBergamot(
+              selectedEngineId,
+              engineUi.getSelectedLanguage(selectedEngineId)
+            )
+          : null;
+      if (inferredFrom) {
+        translateImageFrom.value = inferredFrom;
+        if (translateImageTo.value === inferredFrom) {
+          translateImageTo.value = inferredFrom === 'en' ? 'es' : 'en';
+        }
+      }
+      resetTranslateImage(
+        result.items?.length
+          ? 'Ready to replace and translate detected text.'
+          : 'No positioned text was detected.'
+      );
+      refreshTranslateImageAvailability();
 
       output.textContent =
         result.text.trim().length > 0 ? result.text : 'No text detected in this image.';
@@ -413,6 +558,83 @@ export const initApp = (options: AppOptions = {}): AppInstance => {
       setBusy(false);
     }
   };
+
+  translateImageRunButton.addEventListener('click', (): void => {
+    if (
+      !originalImageData ||
+      !lastResult?.items?.length ||
+      !selectedEngineId ||
+      translateImageRunButton.disabled
+    )
+      return;
+    const operationGeneration = sourceGeneration;
+    const taskGeneration = ++translateTaskGeneration;
+    clearTranslatedImage();
+    const input: TranslateImageInput = {
+      original: originalImageData,
+      ocrItems: lastResult.items,
+      engineId: selectedEngineId,
+      from: translateImageFrom.value,
+      to: translateImageTo.value,
+      ocrSize: { width: lastProcessedWidth, height: lastProcessedHeight },
+      translator: null as unknown as ITextTranslator,
+    };
+    translateImageRunButton.disabled = true;
+    translateBusy = true;
+    translateImageDownloadButton.disabled = true;
+    translateImageError.textContent = '';
+    translateImageError.classList.add('hidden');
+    translateImageStatus.textContent = 'Loading on-device translation model…';
+    void (async (): Promise<void> => {
+      try {
+        input.translator = await getTranslator();
+        if (operationGeneration !== sourceGeneration || taskGeneration !== translateTaskGeneration)
+          return;
+        translateImageStatus.textContent = 'Translating and rendering image…';
+        const quality = translateImageQuality.value as TranslateImageOptions['quality'];
+        const response = await translateImage(input, { quality });
+        if (operationGeneration !== sourceGeneration || taskGeneration !== translateTaskGeneration)
+          return;
+        clearTranslatedImage();
+        translatedImageUrl = URL.createObjectURL(response.blob);
+        translateImagePreview.src = translatedImageUrl;
+        translateImageResult.classList.remove('hidden');
+        translateImageDownloadButton.disabled = false;
+        translateImageStatus.textContent = 'Image replacement complete.';
+      } catch (error) {
+        logError(error);
+        if (operationGeneration !== sourceGeneration || taskGeneration !== translateTaskGeneration)
+          return;
+        translateImageError.textContent =
+          error instanceof Error ? error.message : 'Image replacement failed.';
+        translateImageError.classList.remove('hidden');
+        translateImageStatus.textContent = 'Image replacement failed.';
+      } finally {
+        if (taskGeneration === translateTaskGeneration) {
+          translateBusy = false;
+          if (operationGeneration === sourceGeneration) refreshTranslateImageAvailability();
+        }
+      }
+    })();
+  });
+
+  translateImageDownloadButton.addEventListener('click', (): void => {
+    if (!translatedImageUrl) return;
+    const link = document.createElement('a');
+    link.href = translatedImageUrl;
+    const baseName =
+      selectedSource instanceof File ? selectedSource.name.replace(/\.[^.]+$/, '') : 'image';
+    link.download = `${baseName}-translated.png`;
+    link.click();
+  });
+
+  const resetImageResultForOptionChange = (): void => {
+    resetTranslateImage('Ready to replace and translate detected text.');
+    refreshTranslateImageAvailability();
+  };
+  translateImageFrom.addEventListener('change', resetImageResultForOptionChange);
+  translateImageTo.addEventListener('change', resetImageResultForOptionChange);
+  translateImageQuality.addEventListener('change', resetImageResultForOptionChange);
 
   runButton.addEventListener('click', (): void => {
     void runOcr();

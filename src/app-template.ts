@@ -91,6 +91,53 @@ export const getAppTemplate = (): string => `
             </button>
           </div>
           <div id="output" class="output">Upload an image to begin.</div>
+          <section class="translate-section" aria-labelledby="translate-image-heading">
+            <div class="result-header">
+              <h3 id="translate-image-heading">Replace text in image</h3>
+            </div>
+            <div class="translate-controls">
+              <div class="translate-select">
+                <label for="translate-image-from">From</label>
+                <select id="translate-image-from"></select>
+              </div>
+              <div class="translate-select">
+                <label for="translate-image-to">To</label>
+                <select id="translate-image-to"></select>
+              </div>
+              <div class="translate-select">
+                <label for="translate-image-quality">Quality</label>
+                <select id="translate-image-quality">
+                  <option value="fast">Fast</option>
+                  <option value="balanced" selected>Balanced</option>
+                  <option value="high-quality">High quality</option>
+                </select>
+              </div>
+              <button id="translate-image-run" class="primary-button" type="button" disabled>
+                Replace and translate
+              </button>
+              <button id="translate-image-download" class="ghost-button" type="button" disabled>
+                Download PNG
+              </button>
+            </div>
+            <div id="translate-image-status" class="translate-status" role="status">
+              Run OCR to enable image replacement.
+            </div>
+            <div id="translate-image-error" class="translate-error hidden" role="alert"></div>
+            <div class="image-compare">
+              <div class="preview-card">
+                <div class="preview-label">Original</div>
+                <div class="preview-wrapper">
+                  <img id="replace-original-preview" class="image-preview" alt="Original image" />
+                </div>
+              </div>
+              <div id="translate-image-result" class="preview-card hidden">
+                <div class="preview-label">Translated</div>
+                <div class="preview-wrapper">
+                  <img id="translate-image-preview" class="image-preview" alt="Translated image" />
+                </div>
+              </div>
+            </div>
+          </section>
         </section>
       </div>
       </div>
