@@ -209,6 +209,56 @@ describe('translate image text wrapping', () => {
     }
   });
 
+  it('fits multiline text using the positioned ascender and descender union', () => {
+    const originalCreateElement = document.createElement.bind(document);
+    const fakeContext = {
+      font: '10px sans-serif',
+      measureText(text: string): {
+        width: number;
+        actualBoundingBoxAscent: number;
+        actualBoundingBoxDescent: number;
+      } {
+        const size = fontSizeFromCss(this.font);
+        const isDescender = text.includes('g');
+        return {
+          width: Array.from(text).length * size * 0.4,
+          actualBoundingBoxAscent: size * (isDescender ? 0.5 : 0.7),
+          actualBoundingBoxDescent: size * (isDescender ? 0.2 : 0),
+        };
+      },
+    };
+    const createElement = vi.spyOn(document, 'createElement').mockImplementation((tagName, options) => {
+      if (tagName === 'canvas') {
+        return { width: 1, height: 1, getContext: () => fakeContext } as unknown as HTMLCanvasElement;
+      }
+      return originalCreateElement(tagName, options);
+    });
+    try {
+      const layout = computeTextLayout({
+        text: 'H g',
+        width: 12,
+        height: 39,
+        fontFamily: 'sans-serif',
+        align: 'left',
+        direction: 'ltr',
+        targetLineCount: 2,
+        isCjk: false,
+        minFontSize: 10,
+        maxFontSize: 20,
+      });
+      const lineHeight = layout.fontSize * 1.18;
+      const inkTop = layout.baselineY - layout.fontSize * 0.7;
+      const inkBottom = layout.baselineY + lineHeight + layout.fontSize * 0.2;
+
+      expect(layout.lines).toEqual(['H', 'g']);
+      expect(layout.fontSize).toBeLessThan(20);
+      expect(inkTop).toBeGreaterThanOrEqual(0);
+      expect(inkBottom).toBeLessThanOrEqual(39);
+    } finally {
+      createElement.mockRestore();
+    }
+  });
+
   it('preserves a small, legible native-size label below fourteen pixels', () => {
     const originalCreateElement = document.createElement.bind(document);
     const fakeContext = {

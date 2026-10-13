@@ -107,6 +107,57 @@ const chromaticityDistance = (a: Color, b: Color): number => {
   return distance(normalize(a), normalize(b));
 };
 
+const hasDistinctSecondaryInk = (
+  inkPixels: InkPixel[],
+  corePixels: InkPixel[],
+  candidateColor: Color,
+  imageWidth: number,
+  boxArea: number
+): boolean => {
+  const coreKeys = new Set(corePixels.map((pixel) => pixel.y * imageWidth + pixel.x));
+  const secondary = inkPixels.filter((pixel) => distance(pixel.color, candidateColor) > 28);
+  const secondaryByKey = new Map(
+    secondary.map((pixel) => [pixel.y * imageWidth + pixel.x, pixel] as const)
+  );
+  const visited = new Set<number>();
+  const minComponentSize = Math.max(4, boxArea * 0.01);
+
+  for (const [startKey, startPixel] of secondaryByKey) {
+    if (visited.has(startKey)) continue;
+    const pending = [startPixel];
+    const component: InkPixel[] = [];
+    let touchesCore = false;
+    visited.add(startKey);
+
+    while (pending.length > 0) {
+      const pixel = pending.pop();
+      if (!pixel) continue;
+      component.push(pixel);
+      for (let dy = -1; dy <= 1; dy += 1) {
+        for (let dx = -1; dx <= 1; dx += 1) {
+          if (dx === 0 && dy === 0) continue;
+          const key = (pixel.y + dy) * imageWidth + pixel.x + dx;
+          if (coreKeys.has(key)) touchesCore = true;
+          const neighbor = secondaryByKey.get(key);
+          if (neighbor && !visited.has(key)) {
+            visited.add(key);
+            pending.push(neighbor);
+          }
+        }
+      }
+    }
+
+    if (
+      !touchesCore &&
+      component.length >= minComponentSize &&
+      component.length / Math.max(1, inkPixels.length) >= 0.08
+    ) {
+      return true;
+    }
+  }
+  return false;
+};
+
 /**
  * Removes only pixels that differ strongly from a locally interpolated background
  * around each OCR token. If the surrounding pixels do not describe a stable surface,
@@ -168,12 +219,20 @@ export const rasterizeInkToMask = (
     const mixedForeground =
       offHuePixels.length >= Math.max(4, boxArea * 0.01) &&
       offHuePixels.length / Math.max(1, strongPixels.length) >= 0.08;
+    const distinctSecondaryInk = hasDistinctSecondaryInk(
+      inkPixels,
+      corePixels,
+      candidateColor,
+      image.width,
+      boxArea
+    );
     const trustworthy =
       corePixels.length >= 4 &&
       inkRatio >= 0.012 &&
       inkRatio <= 0.62 &&
       consistentForeground &&
       !mixedForeground &&
+      !distinctSecondaryInk &&
       medianResidual < threshold;
     if (trustworthy) {
       for (const pixel of corePixels) {

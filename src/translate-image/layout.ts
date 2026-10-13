@@ -125,14 +125,32 @@ export const wrapText = (
   return lines;
 };
 
-const measuredInkHeight = (lines: string[], context: Context2D, lineHeight: number): number => {
-  if (lines.length === 0) return 0;
-  const glyphHeight = lines.reduce((height, line) => {
+const positionedInkBounds = (
+  lines: string[],
+  context: Context2D,
+  lineHeight: number,
+  fallbackAscent: number
+): { top: number; bottom: number } => {
+  if (lines.length === 0) return { top: 0, bottom: 0 };
+  let top = Infinity;
+  let bottom = -Infinity;
+  for (const [index, line] of lines.entries()) {
     const metrics = context.measureText(line);
-    const measured = (metrics.actualBoundingBoxAscent ?? 0) + (metrics.actualBoundingBoxDescent ?? 0);
-    return Math.max(height, measured);
-  }, 0);
-  return glyphHeight + Math.max(0, lines.length - 1) * lineHeight;
+    const baselineOffset = index * lineHeight;
+    top = Math.min(top, baselineOffset - (metrics.actualBoundingBoxAscent ?? fallbackAscent));
+    bottom = Math.max(bottom, baselineOffset + (metrics.actualBoundingBoxDescent ?? 0));
+  }
+  return { top, bottom };
+};
+
+const positionedInkHeight = (
+  lines: string[],
+  context: Context2D,
+  lineHeight: number,
+  fallbackAscent: number
+): number => {
+  const bounds = positionedInkBounds(lines, context, lineHeight, fallbackAscent);
+  return bounds.bottom - bounds.top;
 };
 
 export const computeTextLayout = (options: {
@@ -177,7 +195,7 @@ export const computeTextLayout = (options: {
       options.language
     );
     const lineHeight = size * 1.18;
-    const height = measuredInkHeight(lines, context, lineHeight);
+    const height = positionedInkHeight(lines, context, lineHeight, size * 0.8);
     const width = lines.reduce((max, line) => Math.max(max, context.measureText(line).width), 0);
     const fits = width <= options.width * 0.98 && height <= options.height * 0.98;
     if (fits) {
@@ -202,7 +220,7 @@ export const computeTextLayout = (options: {
       options.isCjk,
       options.language
     );
-    const height = measuredInkHeight(bestLines, context, bestSize * 1.18);
+    const height = positionedInkHeight(bestLines, context, bestSize * 1.18, bestSize * 0.8);
     const width = bestLines.reduce(
       (max, line) => Math.max(max, context.measureText(line).width),
       0
@@ -216,13 +234,11 @@ export const computeTextLayout = (options: {
 
   context.font = `${fontStyle} ${fontWeight} ${bestSize}px ${options.fontFamily}`;
   const lineHeight = bestSize * 1.18;
-  const firstMetrics = context.measureText(bestLines[0] ?? '');
-  const lastMetrics = context.measureText(bestLines[bestLines.length - 1] ?? '');
-  const firstAscent = firstMetrics.actualBoundingBoxAscent ?? bestSize * 0.8;
-  const lastDescent = lastMetrics.actualBoundingBoxDescent ?? 0;
+  const inkBounds = positionedInkBounds(bestLines, context, lineHeight, bestSize * 0.8);
+  const inkHeight = inkBounds.bottom - inkBounds.top;
   const baselineY = options.verticalAlign === 'middle'
-    ? (options.height - (firstAscent + lastDescent + Math.max(0, bestLines.length - 1) * lineHeight)) / 2 + firstAscent
-    : options.height - lastDescent - 1 - Math.max(0, bestLines.length - 1) * lineHeight;
+    ? (options.height - inkHeight) / 2 - inkBounds.top
+    : options.height - 1 - inkBounds.bottom;
   return { lines: bestLines, fontSize: bestSize, lineHeight, baselineY };
 };
 

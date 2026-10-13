@@ -160,4 +160,42 @@ describe('OCR ink mask', () => {
     expect(insideCount).toBe(34 * 16);
     expect(mask[16 * image.width + 50]).toBe(0);
   });
+
+  it.each([
+    ['gray', [100, 100, 100] as [number, number, number]],
+    ['light red', [255, 160, 160] as [number, number, number]],
+  ])('falls back when a separate lower-contrast %s stroke sits beside dominant black ink', (_label, secondaryColor) => {
+    const image = createSurface(64, 32);
+    for (let y = 0; y < image.height; y += 1) {
+      for (let x = 0; x < image.width; x += 1) paintPixel(image, x, y, [255, 255, 255]);
+    }
+    const item: OCRItem = {
+      text: 'SALE',
+      confidence: 1,
+      boundingBox: { x: 10, y: 6, width: 36, height: 18 },
+    };
+    // Forty dominant black pixels and twenty secondary pixels model separated
+    // source strokes whose contrast is lower than the black letters.
+    for (let y = 10; y < 18; y += 1) {
+      for (let x = 14; x < 19; x += 1) paintPixel(image, x, y, [0, 0, 0]);
+    }
+    for (let y = 12; y < 16; y += 1) {
+      for (let x = 31; x < 36; x += 1) paintPixel(image, x, y, secondaryColor);
+    }
+    // Decoration outside the OCR geometry must remain untouched.
+    paintPixel(image, 47, 14, secondaryColor);
+
+    const { mask, fallbackItems } = rasterizeInkToMask(image, [item], {
+      x: 0,
+      y: 0,
+      width: image.width,
+      height: image.height,
+    });
+
+    expect(fallbackItems).toBe(1);
+    for (let y = 6; y < 24; y += 1) {
+      for (let x = 10; x < 46; x += 1) expect(mask[y * image.width + x]).toBe(255);
+    }
+    expect(mask[14 * image.width + 47]).toBe(0);
+  });
 });
