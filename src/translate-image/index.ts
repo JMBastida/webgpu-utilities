@@ -243,7 +243,8 @@ export const translateImage = async (
     const colors = detectedInk.estimatedTextColors.filter(
       (color): color is [number, number, number] => Boolean(color)
     );
-    const { text: _ocrColorHint, ...regionStyleWithoutText } = region.style ?? {};
+    const regionStyleWithoutText = { ...region.style };
+    delete regionStyleWithoutText.text;
     if (colors.length > 0) {
       region.style = {
         ...regionStyleWithoutText,
