@@ -5,7 +5,7 @@
 
 ### 2026-10-13: Keep text replacement local and conservative
 
-**Decision**: Use a locally inferred foreground mask where its color is consistent with text, and fall back to the OCR quad when the surface is ambiguous, multiple unexplained foreground hues are present, or a substantial separated secondary ink component could remain. Use directional interpolation only on smooth or strongly directional surfaces; otherwise use local propagation fill. Scale OCR font metadata with image coordinates, measure the final font style against actual glyph bounds at their rendered line baselines, preserve source cap height and baseline where text fits, and show an actionable error when a translation cannot fit at a source-relative minimum.
+**Decision**: Use a locally inferred foreground mask where its color is consistent with text, and fall back to the OCR quad when the surface is ambiguous, multiple unexplained foreground hues are present, or detached secondary ink components collectively represent a substantial portion of the detected ink. Use directional interpolation only on smooth or strongly directional surfaces; otherwise use local propagation fill. Scale OCR font metadata with image coordinates, measure the final font style against actual glyph bounds at their rendered line baselines, preserve source cap height and baseline where text fits, and show an actionable error when a translation cannot fit at a source-relative minimum.
 
 **Rationale**:
 - Broad OCR-box erasure damages surrounding gradients and fine decoration.

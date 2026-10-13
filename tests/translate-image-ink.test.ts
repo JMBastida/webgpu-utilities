@@ -198,4 +198,65 @@ describe('OCR ink mask', () => {
     }
     expect(mask[14 * image.width + 47]).toBe(0);
   });
+
+  it('aggregates separated lower-contrast glyphs across the OCR item', () => {
+    const image = createSurface(96, 36);
+    for (let y = 0; y < image.height; y += 1) {
+      for (let x = 0; x < image.width; x += 1) paintPixel(image, x, y, [255, 255, 255]);
+    }
+    const item: OCRItem = {
+      text: 'SALE NOW',
+      confidence: 1,
+      boundingBox: { x: 5, y: 4, width: 80, height: 24 },
+    };
+    // A dominant black glyph and three detached gray glyphs. Each gray
+    // component is below 8% of all ink, but together they form clear text mass.
+    for (let y = 6; y < 26; y += 1) {
+      for (let x = 10; x < 20; x += 1) paintPixel(image, x, y, [0, 0, 0]);
+    }
+    for (const startX of [32, 48, 64]) {
+      for (let y = 12; y < 16; y += 1) {
+        for (let x = startX; x < startX + 5; x += 1) paintPixel(image, x, y, [100, 100, 100]);
+      }
+    }
+    paintPixel(image, 86, 14, [100, 100, 100]);
+
+    const { mask, fallbackItems } = rasterizeInkToMask(image, [item], {
+      x: 0,
+      y: 0,
+      width: image.width,
+      height: image.height,
+    });
+
+    expect(fallbackItems).toBe(1);
+    for (let y = 4; y < 28; y += 1) {
+      for (let x = 5; x < 85; x += 1) expect(mask[y * image.width + x]).toBe(255);
+    }
+    expect(mask[14 * image.width + 86]).toBe(0);
+  });
+
+  it('does not treat an antialias edge attached to the main stroke as a secondary word', () => {
+    const image = createSurface(48, 28);
+    for (let y = 0; y < image.height; y += 1) {
+      for (let x = 0; x < image.width; x += 1) paintPixel(image, x, y, [255, 255, 255]);
+    }
+    const item: OCRItem = {
+      text: 'I',
+      confidence: 1,
+      boundingBox: { x: 10, y: 6, width: 18, height: 16 },
+    };
+    for (let y = 9; y < 17; y += 1) {
+      for (let x = 15; x < 20; x += 1) paintPixel(image, x, y, [0, 0, 0]);
+      paintPixel(image, 20, y, [100, 100, 100]);
+    }
+
+    const { fallbackItems } = rasterizeInkToMask(image, [item], {
+      x: 0,
+      y: 0,
+      width: image.width,
+      height: image.height,
+    });
+
+    expect(fallbackItems).toBe(0);
+  });
 });

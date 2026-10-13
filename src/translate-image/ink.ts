@@ -120,7 +120,8 @@ const hasDistinctSecondaryInk = (
     secondary.map((pixel) => [pixel.y * imageWidth + pixel.x, pixel] as const)
   );
   const visited = new Set<number>();
-  const minComponentSize = Math.max(4, boxArea * 0.01);
+  const minimumCredibleComponent = 4;
+  let distinctSecondaryInkPixels = 0;
 
   for (const [startKey, startPixel] of secondaryByKey) {
     if (visited.has(startKey)) continue;
@@ -147,15 +148,14 @@ const hasDistinctSecondaryInk = (
       }
     }
 
-    if (
-      !touchesCore &&
-      component.length >= minComponentSize &&
-      component.length / Math.max(1, inkPixels.length) >= 0.08
-    ) {
-      return true;
+    if (!touchesCore && component.length >= minimumCredibleComponent) {
+      distinctSecondaryInkPixels += component.length;
     }
   }
-  return false;
+  return (
+    distinctSecondaryInkPixels >= Math.max(4, boxArea * 0.01) &&
+    distinctSecondaryInkPixels / Math.max(1, inkPixels.length) >= 0.08
+  );
 };
 
 /**
