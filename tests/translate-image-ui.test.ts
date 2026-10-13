@@ -1,6 +1,7 @@
 /* @vitest-environment jsdom */
 import { describe, it, expect, vi } from 'vitest';
 import { initApp } from '../src/app';
+import { getAppTemplate } from '../src/app-template';
 import type { FeatureDetector } from '../src/utils/feature-detector';
 import type { ImageProcessor } from '../src/utils/image-processor';
 import type { OCRManager } from '../src/ocr-manager';
@@ -99,6 +100,28 @@ const flushPromises = async (): Promise<void> => {
 };
 
 describe('Translate image UI', () => {
+  it('groups translation settings and actions with accessible names', () => {
+    const root = document.createElement('div');
+    root.innerHTML = getAppTemplate();
+
+    const settings = root.querySelector<HTMLElement>('[aria-label="Translation settings"]');
+    const actions = root.querySelector<HTMLElement>('[aria-label="Replacement actions"]');
+
+    expect(settings?.getAttribute('role')).toBe('group');
+    expect(
+      Array.from(settings?.querySelectorAll('select') ?? []).map((select) => select.id)
+    ).toEqual(['translate-image-from', 'translate-image-to', 'translate-image-quality']);
+    expect(actions?.getAttribute('role')).toBe('group');
+    expect(
+      Array.from(actions?.querySelectorAll('button') ?? []).map((button) => button.id)
+    ).toEqual(['translate-image-run', 'translate-image-apply-edits', 'translate-image-download']);
+    expect(root.querySelector<HTMLButtonElement>('#translate-image-run')?.disabled).toBe(true);
+    expect(root.querySelector<HTMLButtonElement>('#translate-image-apply-edits')?.disabled).toBe(
+      true
+    );
+    expect(root.querySelector<HTMLButtonElement>('#translate-image-download')?.disabled).toBe(true);
+  });
+
   it('enables download after translation', async () => {
     document.body.innerHTML = '<div id="app"></div>';
     const root = document.querySelector<HTMLElement>('#app');
@@ -309,7 +332,9 @@ describe('Translate image UI', () => {
     await flushPromises();
     expect(translateImageImpl).toHaveBeenCalledTimes(1);
     expect(translateImageImpl.mock.calls[0]?.[0].manualTranslations).toEqual(['Manual Spanish']);
-    expect(root.querySelector<HTMLButtonElement>('#translate-image-download')?.disabled).toBe(false);
+    expect(root.querySelector<HTMLButtonElement>('#translate-image-download')?.disabled).toBe(
+      false
+    );
   });
 
   it('keeps overflowing translated text editable for a manual correction', async () => {
@@ -365,11 +390,11 @@ describe('Translate image UI', () => {
     applyButton.click();
     await flushPromises();
     expect(translateImageImpl).toHaveBeenCalledTimes(2);
-    const correctedInput = translateImageImpl.mock.calls[1]?.[0] as
-      | TranslateImageInput
-      | undefined;
+    const correctedInput = translateImageImpl.mock.calls[1]?.[0] as TranslateImageInput | undefined;
     expect(correctedInput?.manualTranslations).toEqual(['OK']);
-    expect(root.querySelector<HTMLButtonElement>('#translate-image-download')?.disabled).toBe(false);
+    expect(root.querySelector<HTMLButtonElement>('#translate-image-download')?.disabled).toBe(
+      false
+    );
   });
 
   it('retries model initialization after a failed load', async () => {
@@ -481,7 +506,9 @@ describe('Translate image UI', () => {
     completeReplacement?.({ blob: new Blob(['old output'], { type: 'image/png' }) });
     await flushPromises();
 
-    expect(root.querySelector<HTMLDivElement>('#translate-image-result')?.classList.contains('hidden')).toBe(true);
+    expect(
+      root.querySelector<HTMLDivElement>('#translate-image-result')?.classList.contains('hidden')
+    ).toBe(true);
     expect(root.querySelector<HTMLButtonElement>('#translate-image-download')?.disabled).toBe(true);
   });
 });
