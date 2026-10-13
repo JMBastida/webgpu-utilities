@@ -80,6 +80,9 @@ export const blendLayer = (
   const { width: layerWidth } = layer;
   for (let y = 0; y < layer.height; y += 1) {
     for (let x = 0; x < layerWidth; x += 1) {
+      const targetX = bounds.x + x;
+      const targetY = bounds.y + y;
+      if (targetX < 0 || targetY < 0 || targetX >= target.width || targetY >= target.height) continue;
       const layerIdx = (y * layerWidth + x) * 4;
       const alpha = (layer.data[layerIdx + 3] ?? 0) / 255;
       if (alpha <= 0) continue;
@@ -89,7 +92,7 @@ export const blendLayer = (
         a = clamp01(a * (1 + (texVal / 255) * 0.18));
       }
       if (a <= 0) continue;
-      const idx = ((bounds.y + y) * targetWidth + (bounds.x + x)) * 4;
+      const idx = (targetY * targetWidth + targetX) * 4;
       const bgR = target.data[idx] ?? 0;
       const bgG = target.data[idx + 1] ?? 0;
       const bgB = target.data[idx + 2] ?? 0;

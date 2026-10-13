@@ -113,6 +113,7 @@ describe('Translate image UI', () => {
       (_input: TranslateImageInput): Promise<TranslateImageOutput> =>
         Promise.resolve({
           blob: new Blob([new Uint8Array([1])], { type: 'image/png' }),
+          regionTranslations: [{ sourceText: 'Detected', text: 'Translated' }],
         })
     );
 
@@ -168,9 +169,26 @@ describe('Translate image UI', () => {
     expect(translationInput?.original).toBeInstanceOf(ImageData);
     expect(translationOptions).toEqual({ quality: 'balanced' });
 
-    replacementButton.click();
+    const replacementInput = root.querySelector<HTMLTextAreaElement>('#translate-image-edit-0')!;
+    expect(replacementInput.value).toBe('Translated');
+    replacementInput.value = 'Edited replacement';
+    root.querySelector<HTMLButtonElement>('#translate-image-apply-edits')!.click();
     await flushPromises();
     expect(translateImageImpl).toHaveBeenCalledTimes(2);
+    expect(translateImageImpl.mock.calls[1]?.[0].manualTranslations).toEqual([
+      'Edited replacement',
+    ]);
+    expect(translateImageImpl.mock.calls[1]?.[0].translator).toBe(translator);
+
+    replacementInput.value = '';
+    root.querySelector<HTMLButtonElement>('#translate-image-apply-edits')!.click();
+    await flushPromises();
+    expect(translateImageImpl).toHaveBeenCalledTimes(3);
+    expect(translateImageImpl.mock.calls[2]?.[0].manualTranslations).toEqual(['']);
+
+    replacementButton.click();
+    await flushPromises();
+    expect(translateImageImpl).toHaveBeenCalledTimes(4);
 
     attachFile(
       app.elements.fileInput,
@@ -191,8 +209,12 @@ describe('Translate image UI', () => {
       translate: translateSpy,
       destroy: vi.fn(),
     };
+    const translateImageFailure = new Error('Could not fetch model for en->es');
+    (translateImageFailure as Error & { cause?: unknown }).cause = new Error(
+      'Could not download model asset. Set VITE_BERGAMOT_MODEL_ASSET_BASE_URL for same-origin assets.'
+    );
     const translateImageImpl = vi.fn(
-      (): Promise<TranslateImageOutput> => Promise.reject(new Error('Translate image failed'))
+      (): Promise<TranslateImageOutput> => Promise.reject(translateImageFailure)
     );
 
     const app = initApp({
@@ -230,7 +252,8 @@ describe('Translate image UI', () => {
 
     const error = root.querySelector<HTMLDivElement>('#translate-image-error')!;
     expect(error.classList.contains('hidden')).toBe(false);
-    expect(error.textContent).toContain('Translate image failed');
+    expect(error.textContent).toContain('Could not fetch model');
+    expect(error.textContent).toContain('VITE_BERGAMOT_MODEL_ASSET_BASE_URL');
   });
 
   it('retries model initialization after a failed load', async () => {

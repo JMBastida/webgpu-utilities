@@ -75,6 +75,34 @@ export const inpaintImageFallback = (
     return output;
   }
 
+  let maskedCount = 0;
+  for (const value of mask) if (value > 0) maskedCount += 1;
+  if (maskedCount === boundsSize) {
+    const expanded: Bounds = {
+      x: Math.max(0, bounds.x - 1),
+      y: Math.max(0, bounds.y - 1),
+      width: 0,
+      height: 0,
+    };
+    const right = Math.min(original.width, bounds.x + bounds.width + 1);
+    const bottom = Math.min(original.height, bounds.y + bounds.height + 1);
+    expanded.width = right - expanded.x;
+    expanded.height = bottom - expanded.y;
+    if (expanded.width === bounds.width && expanded.height === bounds.height) {
+      throw new Error('The text mask has no unmasked source pixels for background restoration.');
+    }
+    const expandedMask = new Uint8ClampedArray(expanded.width * expanded.height);
+    const offsetX = bounds.x - expanded.x;
+    const offsetY = bounds.y - expanded.y;
+    for (let y = 0; y < bounds.height; y += 1) {
+      for (let x = 0; x < bounds.width; x += 1) {
+        expandedMask[(y + offsetY) * expanded.width + x + offsetX] =
+          mask[y * boundsWidth + x] ?? 0;
+      }
+    }
+    return inpaintImageFallback(original, expandedMask, expanded, quality);
+  }
+
   const masked = new Uint8Array(boundsSize);
   const filled = new Uint8Array(boundsSize);
   const queueX = new Int32Array(boundsSize);

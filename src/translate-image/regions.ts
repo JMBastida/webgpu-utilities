@@ -16,6 +16,8 @@ type Line = {
   bbox: Bbox;
   centerY: number;
   text: string;
+  lineId?: string;
+  paragraphId?: string;
 };
 
 const CJK_PREFIXES = ['zh', 'ja', 'ko'];
@@ -77,6 +79,14 @@ const overlapRatio = (a: Bbox, b: Bbox): number => {
   return denom > 0 ? overlap / denom : 0;
 };
 
+const horizontalGap = (a: Bbox, b: Bbox): number =>
+  Math.max(0, Math.max(a.x - (b.x + b.width), b.x - (a.x + a.width)));
+
+const horizontalOverlapRatio = (a: Bbox, b: Bbox): number => {
+  const overlap = Math.max(0, Math.min(a.x + a.width, b.x + b.width) - Math.max(a.x, b.x));
+  return overlap / Math.max(1, Math.min(a.width, b.width));
+};
+
 const normalizeTokenText = (text: string): string => text.replace(/\s+/g, ' ').trim();
 
 const lineText = (tokens: Token[], isCjk: boolean): string => {
@@ -133,9 +143,14 @@ export const buildRegions = (
   for (const token of sortedTokens) {
     const candidates = lines.filter(
       (line) =>
-        (Math.abs(token.centerY - line.centerY) <= 0.8 * medianHeight ||
-          overlapRatio(token.bbox, line.bbox) >= 0.5) &&
-        overlapRatio(token.bbox, line.bbox) >= 0.1
+        (token.item.lineId && line.lineId
+          ? token.item.lineId === line.lineId &&
+            horizontalGap(token.bbox, line.bbox) <= Math.max(3.5 * medianHeight, 12)
+          : (!token.item.lineId || !line.lineId) &&
+            (Math.abs(token.centerY - line.centerY) <= 0.8 * medianHeight ||
+              overlapRatio(token.bbox, line.bbox) >= 0.5) &&
+            overlapRatio(token.bbox, line.bbox) >= 0.1 &&
+            horizontalGap(token.bbox, line.bbox) <= Math.max(1.5 * medianHeight, 12))
     );
     if (candidates.length === 0) {
       lines.push({
@@ -143,6 +158,8 @@ export const buildRegions = (
         bbox: token.bbox,
         centerY: token.centerY,
         text: '',
+        lineId: token.item.lineId,
+        paragraphId: token.item.paragraphId,
       });
       continue;
     }
@@ -155,6 +172,8 @@ export const buildRegions = (
       target.tokens.push(token);
       target.bbox = unionBbox(target.bbox, token.bbox);
       target.centerY = target.bbox.y + target.bbox.height / 2;
+      target.lineId ??= token.item.lineId;
+      target.paragraphId ??= token.item.paragraphId;
     }
   }
 
@@ -165,28 +184,28 @@ export const buildRegions = (
   }
 
   const orderedLines = [...lines].sort((a, b) => a.bbox.y - b.bbox.y || a.bbox.x - b.bbox.x);
-  const paragraphs: Line[][] = [];
-  let current: Line[] = [];
-
+  const geometricParagraphs: Line[][] = [];
   for (const line of orderedLines) {
-    if (current.length === 0) {
-      current = [line];
-      continue;
-    }
-    const previous = current[current.length - 1];
-    if (previous) {
-      const gap = line.bbox.y - (previous.bbox.y + previous.bbox.height);
-      if (gap > 1.2 * medianHeight) {
-        paragraphs.push(current);
-        current = [line];
-      } else {
-        current.push(line);
+    const candidates = geometricParagraphs.filter((group) => {
+      const previous = group[group.length - 1];
+      if (!previous || (previous.paragraphId && line.paragraphId && previous.paragraphId !== line.paragraphId)) {
+        return false;
       }
-    }
+      const gap = line.bbox.y - (previous.bbox.y + previous.bbox.height);
+      const sameColumn =
+        horizontalGap(line.bbox, previous.bbox) <= Math.max(1.5 * medianHeight, 12) ||
+        horizontalOverlapRatio(line.bbox, previous.bbox) >= 0.2;
+      return gap >= -0.5 * medianHeight && gap <= 1.2 * medianHeight && sameColumn;
+    });
+    const target = candidates[candidates.length - 1];
+    if (target) target.push(line);
+    else geometricParagraphs.push([line]);
   }
-  if (current.length > 0) {
-    paragraphs.push(current);
-  }
+  const paragraphs = geometricParagraphs.sort((a, b) => {
+    const aTop = Math.min(...a.map((line) => line.bbox.y));
+    const bTop = Math.min(...b.map((line) => line.bbox.y));
+    return aTop - bTop || Math.min(...a.map((line) => line.bbox.x)) - Math.min(...b.map((line) => line.bbox.x));
+  });
 
   return paragraphs.map((group, index) => {
     const groupTokens = group.flatMap((line) => line.tokens);

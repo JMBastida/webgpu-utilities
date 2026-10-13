@@ -295,6 +295,33 @@ p {
   color: var(--ink-2);
 }
 
+.translate-image-editor {
+  display: grid;
+  gap: 0.75rem;
+  margin-top: 0.75rem;
+}
+
+.translate-image-editor-row {
+  display: grid;
+  gap: 0.35rem;
+}
+
+.translate-image-editor-row label {
+  color: var(--ink-2);
+  font-size: 0.875rem;
+}
+
+.translate-image-editor-row textarea {
+  width: 100%;
+  resize: vertical;
+  border: 1px solid var(--border);
+  border-radius: 0.5rem;
+  padding: 0.65rem;
+  color: var(--ink-1);
+  background: var(--card);
+  font: inherit;
+}
+
 .translate-error {
   font-size: 0.9rem;
   color: var(--warning);

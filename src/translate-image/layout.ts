@@ -49,7 +49,12 @@ export const getFontFamily = (code: string): string => {
   return '"Inter", system-ui, -apple-system, "Segoe UI", Roboto, Arial, sans-serif';
 };
 
-const wrapText = (text: string, maxWidth: number, context: Context2D, isCjk: boolean): string[] => {
+export const wrapText = (
+  text: string,
+  maxWidth: number,
+  context: Context2D,
+  isCjk: boolean
+): string[] => {
   const rawLines = text.split(/\r?\n/);
   const lines: string[] = [];
 
@@ -63,10 +68,11 @@ const wrapText = (text: string, maxWidth: number, context: Context2D, isCjk: boo
     let current = '';
     for (const originalToken of tokens) {
       const tokenWidth = context.measureText(originalToken).width;
-      const tokenParts =
-        !isCjk && tokenWidth > maxWidth ? Array.from(originalToken) : [originalToken];
-      for (const token of tokenParts) {
-        const candidate = current ? (isCjk ? `${current}${token}` : `${current} ${token}`) : token;
+      const splitLongWord = !isCjk && tokenWidth > maxWidth;
+      const tokenParts = splitLongWord ? Array.from(originalToken) : [originalToken];
+      for (const [tokenIndex, token] of tokenParts.entries()) {
+        const separator = isCjk || (splitLongWord && tokenIndex > 0) ? '' : ' ';
+        const candidate = current ? `${current}${separator}${token}` : token;
         const width = context.measureText(candidate).width;
         if (width <= maxWidth || !current) {
           current = candidate;

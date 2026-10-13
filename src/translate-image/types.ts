@@ -32,6 +32,8 @@ export interface TranslateImageInput {
   to: string;
   translator: ITextTranslator;
   ocrSize: { width: number; height: number };
+  /** Optional edited replacement text aligned with the regions returned by buildRegions. */
+  manualTranslations?: string[];
 }
 
 export interface TranslateImageOptions {
@@ -63,6 +65,7 @@ export interface TranslateImageDebugStats {
 
 export interface TranslateImageOutput {
   blob: Blob;
+  regionTranslations?: Array<{ sourceText: string; text: string }>;
   debug?: {
     regions: Region[];
     steps?: TranslateImageDebugStep[];

@@ -4,6 +4,9 @@ export interface OCRItem {
   quad?: [[number, number], [number, number], [number, number], [number, number]];
   style?: { bg?: [number, number, number]; text?: [number, number, number] };
   angle?: number; // degrees, clockwise-positive in image coordinates
+  lineId?: string;
+  paragraphId?: string;
+  blockId?: string;
   boundingBox: {
     x: number;
     y: number;

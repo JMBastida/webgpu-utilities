@@ -75,6 +75,20 @@ const createRegistryUrl = (): string => {
   return new URL('bergamot/registry.json', baseUrl).toString();
 };
 
+export const resolveBergamotAssetUrl = (
+  assetUrl: string,
+  assetBaseUrl?: string,
+  origin = typeof window === 'undefined' ? 'http://localhost' : window.location.origin
+): string => {
+  if (!assetBaseUrl?.trim()) return assetUrl;
+  const parsed = new URL(assetUrl);
+  const modelPathIndex = parsed.pathname.indexOf('/models/');
+  if (parsed.hostname !== 'storage.googleapis.com' || modelPathIndex < 0) return assetUrl;
+  const relativePath = parsed.pathname.slice(modelPathIndex + '/models/'.length);
+  const base = new URL(`${assetBaseUrl.replace(/\/+$/, '')}/`, origin);
+  return new URL(relativePath, base).toString();
+};
+
 const decompressGzip = async (buffer: ArrayBuffer): Promise<ArrayBuffer> => {
   if (typeof DecompressionStream === 'undefined') {
     throw new Error('Gzip models require DecompressionStream support.');
@@ -82,6 +96,34 @@ const decompressGzip = async (buffer: ArrayBuffer): Promise<ArrayBuffer> => {
   const stream = new Blob([buffer]).stream().pipeThrough(new DecompressionStream('gzip'));
   const response = new Response(stream);
   return response.arrayBuffer();
+};
+
+const isGzipData = (buffer: ArrayBuffer): boolean => {
+  const bytes = new Uint8Array(buffer, 0, Math.min(2, buffer.byteLength));
+  return bytes[0] === 0x1f && bytes[1] === 0x8b;
+};
+
+const toHex = (buffer: ArrayBuffer): string =>
+  Array.from(new Uint8Array(buffer), (byte) => byte.toString(16).padStart(2, '0')).join('');
+
+export const fetchBergamotModelAsset = async (
+  assetUrl: string,
+  checksum?: string,
+  signal?: AbortSignal
+): Promise<ArrayBuffer> => {
+  const response = await fetch(assetUrl, { credentials: 'omit', signal });
+  if (!response.ok) {
+    throw new Error(`Model request returned HTTP ${response.status} ${response.statusText}.`);
+  }
+  let buffer = await response.arrayBuffer();
+  if (isGzipData(buffer)) buffer = await decompressGzip(buffer);
+  if (checksum) {
+    const actual = toHex(await crypto.subtle.digest('SHA-256', buffer));
+    if (actual.toLowerCase() !== checksum.toLowerCase()) {
+      throw new Error(`The downloaded translation model failed its SHA-256 check: ${assetUrl}`);
+    }
+  }
+  return buffer;
 };
 
 export class BergamotTextTranslator implements ITextTranslator {
@@ -119,9 +161,6 @@ export class BergamotTextTranslator implements ITextTranslator {
 
       const originalLoadWorker =
         typeof backing.loadWorker === 'function' ? backing.loadWorker.bind(backing) : null;
-      const originalFetch =
-        typeof backing.fetch === 'function' ? backing.fetch.bind(backing) : null;
-
       backing.loadWorker = function (this: TranslatorBackingLike): Promise<WorkerHandle> {
         // If we have a custom workerUrl, we use it.
         // The library's default uses new URL('./worker/translator-worker.js', import.meta.url)
@@ -177,7 +216,17 @@ export class BergamotTextTranslator implements ITextTranslator {
             );
 
             worker.addEventListener('error', (ev) => {
-              onError(new Error(ev.message || 'Unknown worker error'));
+              const error = new Error(ev.message || 'Unknown worker error');
+              for (const entry of pending.values()) entry.reject(error);
+              pending.clear();
+              onError(error);
+            });
+
+            worker.addEventListener('messageerror', () => {
+              const error = new Error('Could not read a response from the translation worker.');
+              for (const entry of pending.values()) entry.reject(error);
+              pending.clear();
+              onError(error);
             });
 
             await call('initialize', options);
@@ -210,16 +259,22 @@ export class BergamotTextTranslator implements ITextTranslator {
         extra?: { signal?: AbortSignal }
       ): Promise<ArrayBuffer> => {
         return BergamotTextTranslator.cache.loadOrFetch(url, async () => {
-          if (!originalFetch) {
-            // Fallback to global fetch if originalFetch is missing (should not happen if backing is valid)
-            const response = await fetch(url, { signal: extra?.signal });
-            return response.arrayBuffer();
+          const assetUrl = resolveBergamotAssetUrl(
+            url,
+            import.meta.env.VITE_BERGAMOT_MODEL_ASSET_BASE_URL
+          );
+          try {
+            return await fetchBergamotModelAsset(assetUrl, checksum, extra?.signal);
+          } catch (error) {
+            const localHint = assetUrl !== url
+              ? ''
+              : ' If this origin blocks cross-origin model downloads, set VITE_BERGAMOT_MODEL_ASSET_BASE_URL and host the same model files on this origin.';
+            const failure = new Error(
+              `Could not download the offline translation model asset from ${assetUrl}.${localHint}`
+            );
+            (failure as Error & { cause?: unknown }).cause = error;
+            throw failure;
           }
-          const buffer = await originalFetch(url, checksum, extra);
-          if (url.endsWith('.gz')) {
-            return decompressGzip(buffer);
-          }
-          return buffer;
         });
       };
 
@@ -237,7 +292,10 @@ export class BergamotTextTranslator implements ITextTranslator {
       );
 
       // Wait for the worker to be initialized
-      this.initializing = translator.worker.then(() => translator);
+      this.initializing = translator.worker.then(() => translator).catch((error: unknown) => {
+        this.initializing = null;
+        throw error;
+      });
     }
 
     this.instance = await this.initializing;
@@ -249,13 +307,22 @@ export class BergamotTextTranslator implements ITextTranslator {
 
   async translate(request: TranslationRequest): Promise<TranslationResponse> {
     const translator = await this.getTranslator();
-    const response = await translator.translate({
-      from: request.from,
-      to: request.to,
-      text: request.text,
-      html: request.html ?? false,
-    });
-    return { text: response.target.text };
+    try {
+      const response = await translator.translate({
+        from: request.from,
+        to: request.to,
+        text: request.text,
+        html: request.html ?? false,
+      });
+      return { text: response.target.text };
+    } catch (error) {
+      if (this.instance === translator) {
+        this.instance = null;
+        this.initializing = null;
+        void translator.delete();
+      }
+      throw error;
+    }
   }
 
   destroy(): void {

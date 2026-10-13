@@ -15,6 +15,26 @@ const quadBounds = (quad: OCRQuad): Bounds => {
   return { x: minX, y: minY, width: Math.max(1, maxX - minX), height: Math.max(1, maxY - minY) };
 };
 
+const distance = (a: OCRPoint, b: OCRPoint): number => Math.hypot(b.x - a.x, b.y - a.y);
+
+export const rectifiedQuadSize = (quad: OCRQuad): { width: number; height: number } => {
+  if (quad.some((point) => !Number.isFinite(point.x) || !Number.isFinite(point.y))) {
+    throw new Error('OCR quadrilateral contains invalid coordinates.');
+  }
+  const crosses = quad.map((point, index) => {
+    const next = quad[(index + 1) % 4]!;
+    const after = quad[(index + 2) % 4]!;
+    return (next.x - point.x) * (after.y - next.y) - (next.y - point.y) * (after.x - next.x);
+  });
+  const allPositive = crosses.every((cross) => cross > 1e-6);
+  const allNegative = crosses.every((cross) => cross < -1e-6);
+  if (!allPositive && !allNegative) throw new Error('OCR quadrilateral must be convex and non-degenerate.');
+  const width = (distance(quad[0], quad[1]) + distance(quad[3], quad[2])) / 2;
+  const height = (distance(quad[1], quad[2]) + distance(quad[0], quad[3])) / 2;
+  if (width < 1 || height < 1) throw new Error('OCR quadrilateral is too small to render text.');
+  return { width: Math.max(1, Math.round(width)), height: Math.max(1, Math.round(height)) };
+};
+
 const computeHomography = (src: OCRPoint[], dst: OCRPoint[]): Matrix3 => {
   const matrix: number[][] = [];
   const vector: number[] = [];
@@ -138,6 +158,7 @@ export const warpMaskToQuad = (
   source: CanvasLike,
   quad: OCRQuad
 ): { imageData: ImageData; bounds: Bounds } => {
+  rectifiedQuadSize(quad);
   const bounds = quadBounds(quad);
   const context = getContext2d(source);
   const srcData = context.getImageData(0, 0, source.width, source.height);

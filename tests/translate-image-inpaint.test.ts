@@ -108,4 +108,36 @@ describe('inpaint fallback', () => {
     expect(Array.from(result.data.slice(filledIndex, filledIndex + 3))).toEqual([120, 140, 160]);
     expect(Array.from(result.data.slice(untouchedIndex, untouchedIndex + 4))).toEqual([120, 140, 160, 255]);
   });
+
+  it.each(['balanced', 'high-quality'] as const)(
+    'expands a fully masked crop to use a real source margin (%s)',
+    async (quality) => {
+      const image = createImage(12, 12, [180, 190, 200, 255]);
+      paintRect(image, 4, 4, 4, 4, [0, 0, 0, 255]);
+      const mask = new Uint8ClampedArray(16).fill(255);
+      const result = await inpaintImage(
+        image,
+        mask,
+        { x: 4, y: 4, width: 4, height: 4 },
+        { strategy: 'ts-fallback', quality }
+      );
+      const center = (5 * result.width + 5) * 4;
+      expect(Array.from(result.data.slice(center, center + 3))).not.toEqual([0, 0, 0]);
+      expect(Array.from(result.data.slice(center, center + 3))).toEqual([180, 190, 200]);
+    }
+  );
+
+  it.each(['balanced', 'high-quality'] as const)(
+    'fails explicitly when no unmasked source pixel exists (%s)',
+    async (quality) => {
+      const image = createImage(100, 20, [0, 0, 0, 255]);
+      const mask = new Uint8ClampedArray(100 * 20).fill(255);
+      await expect(
+        inpaintImage(image, mask, { x: 0, y: 0, width: 100, height: 20 }, {
+          strategy: 'ts-fallback',
+          quality,
+        })
+      ).rejects.toThrow('no unmasked source pixels');
+    }
+  );
 });

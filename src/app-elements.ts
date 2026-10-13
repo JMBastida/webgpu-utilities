@@ -33,9 +33,11 @@ export interface AppElements {
   translateImageTo: HTMLSelectElement;
   translateImageQuality: HTMLSelectElement;
   translateImageRunButton: HTMLButtonElement;
+  translateImageApplyEditsButton: HTMLButtonElement;
   translateImageDownloadButton: HTMLButtonElement;
   translateImageStatus: HTMLDivElement;
   translateImageError: HTMLDivElement;
+  translateImageEditor: HTMLDivElement;
   replaceOriginalPreview: HTMLImageElement;
   translateImagePreview: HTMLImageElement;
   translateImageResult: HTMLDivElement;
@@ -78,11 +80,15 @@ export const getAppElements = (root: HTMLElement): AppElements => {
   const translateImageTo = root.querySelector<HTMLSelectElement>('#translate-image-to');
   const translateImageQuality = root.querySelector<HTMLSelectElement>('#translate-image-quality');
   const translateImageRunButton = root.querySelector<HTMLButtonElement>('#translate-image-run');
+  const translateImageApplyEditsButton = root.querySelector<HTMLButtonElement>(
+    '#translate-image-apply-edits'
+  );
   const translateImageDownloadButton = root.querySelector<HTMLButtonElement>(
     '#translate-image-download'
   );
   const translateImageStatus = root.querySelector<HTMLDivElement>('#translate-image-status');
   const translateImageError = root.querySelector<HTMLDivElement>('#translate-image-error');
+  const translateImageEditor = root.querySelector<HTMLDivElement>('#translate-image-editor');
   const replaceOriginalPreview = root.querySelector<HTMLImageElement>('#replace-original-preview');
   const translateImagePreview = root.querySelector<HTMLImageElement>('#translate-image-preview');
   const translateImageResult = root.querySelector<HTMLDivElement>('#translate-image-result');
@@ -124,9 +130,11 @@ export const getAppElements = (root: HTMLElement): AppElements => {
     !translateImageTo ||
     !translateImageQuality ||
     !translateImageRunButton ||
+    !translateImageApplyEditsButton ||
     !translateImageDownloadButton ||
     !translateImageStatus ||
     !translateImageError ||
+    !translateImageEditor ||
     !replaceOriginalPreview ||
     !translateImagePreview ||
     !translateImageResult ||
@@ -171,9 +179,11 @@ export const getAppElements = (root: HTMLElement): AppElements => {
     translateImageTo,
     translateImageQuality,
     translateImageRunButton,
+    translateImageApplyEditsButton,
     translateImageDownloadButton,
     translateImageStatus,
     translateImageError,
+    translateImageEditor,
     replaceOriginalPreview,
     translateImagePreview,
     translateImageResult,

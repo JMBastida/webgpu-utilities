@@ -13,7 +13,7 @@ import { inpaintImage } from './inpaint';
 import { getFontFamily, isCjkLanguage, isRtlLanguage, renderTextMasks } from './layout';
 import { blendLayer, prepareTexture } from './blend';
 import { createCanvas, getContext2d } from './canvas';
-import { isRectQuad, warpMaskToQuad } from './warp';
+import { isRectQuad, rectifiedQuadSize, warpMaskToQuad } from './warp';
 
 const clamp = (value: number, min: number, max: number): number =>
   Math.max(min, Math.min(max, value));
@@ -187,11 +187,20 @@ export const translateImage = async (
     throw new Error('No OCR regions available for translation.');
   }
 
+  if (input.manualTranslations && input.manualTranslations.length !== regions.length) {
+    throw new Error('Edited replacement text no longer matches the detected regions.');
+  }
+
   await Promise.all(
-    regions.map(async (region) => {
+    regions.map(async (region, index) => {
       const sourceText = region.sourceLines.join('\n').trim();
       if (!sourceText) {
         region.translatedText = '';
+        return;
+      }
+      const manualText = input.manualTranslations?.[index];
+      if (input.manualTranslations) {
+        region.translatedText = manualText?.trim() ?? '';
         return;
       }
       const response = await input.translator.translate({
@@ -206,7 +215,8 @@ export const translateImage = async (
   const activeRegions = regions.filter(
     (region) => region.translatedText && region.translatedText.trim().length > 0
   );
-  if (activeRegions.length === 0) {
+  const eraseRegions = input.manualTranslations ? regions : activeRegions;
+  if (activeRegions.length === 0 && !input.manualTranslations) {
     throw new Error('No translated text to render.');
   }
 
@@ -215,12 +225,12 @@ export const translateImage = async (
   const dilation = clamp(
     Math.round(
       (quality === 'fast' ? 0.025 : quality === 'high-quality' ? 0.075 : 0.05) *
-        medianValue(activeRegions.map((region) => Math.min(region.bbox.width, region.bbox.height)))
+        medianValue(eraseRegions.map((region) => Math.min(region.bbox.width, region.bbox.height)))
     ) + 1,
     quality === 'fast' ? 1 : 3,
     quality === 'high-quality' ? 20 : 16
   );
-  const activeItems = activeRegions.flatMap((region) => region.items);
+  const activeItems = eraseRegions.flatMap((region) => region.items);
   const inpaintOptions = {
     ...options.inpaint,
     quality,
@@ -232,7 +242,7 @@ export const translateImage = async (
     inpaintOptions.maxRegionSizePx ??
     Math.round(input.original.width * input.original.height * 0.4);
 
-  const regionBounds = activeRegions.map((region) => ({
+  const regionBounds = eraseRegions.map((region) => ({
     region,
     bounds: normalizeBounds(region.bbox, input.original.width, input.original.height),
   }));
@@ -269,7 +279,7 @@ export const translateImage = async (
       ocrHeight: input.ocrSize.height,
       scaleX,
       scaleY,
-      regionCount: activeRegions.length,
+      regionCount: eraseRegions.length,
       outOfBoundsRegions,
       bounds,
       rawMaskPixels,
@@ -372,6 +382,9 @@ export const translateImage = async (
 
   for (const region of activeRegions) {
     const regionBounds = normalizeBounds(region.bbox, output.width, output.height);
+    const layoutSize = isRectQuad(region.quad, regionBounds)
+      ? { width: regionBounds.width, height: regionBounds.height }
+      : rectifiedQuadSize(region.quad);
     const texture = prepareTexture(output, regionBounds);
     const avgLuma = texture.avgLuma;
     const styleText = region.style?.text;
@@ -384,8 +397,8 @@ export const translateImage = async (
 
     const layout = renderTextMasks({
       text: region.translatedText ?? '',
-      width: regionBounds.width,
-      height: regionBounds.height,
+      width: layoutSize.width,
+      height: layoutSize.height,
       fontFamily: targetFontFamily,
       align: alignment,
       direction: rtl ? 'rtl' : 'ltr',
@@ -464,6 +477,10 @@ export const translateImage = async (
   const blob = await toBlob(canvas);
   return {
     blob,
+    regionTranslations: regions.map((region) => ({
+      sourceText: region.sourceLines.join('\n'),
+      text: region.translatedText ?? '',
+    })),
     debug: debugEnabled
       ? { regions: activeRegions, steps: debugSteps, stats: debugStats }
       : undefined,

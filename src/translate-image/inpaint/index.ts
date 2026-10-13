@@ -21,4 +21,6 @@ export const inpaintImage = (
   bounds: Bounds,
   options: InpaintOptions = {}
 ): Promise<ImageData> =>
-  Promise.resolve(inpaintImageFallback(original, mask, bounds, options.quality ?? 'balanced'));
+  Promise.resolve().then(() =>
+    inpaintImageFallback(original, mask, bounds, options.quality ?? 'balanced')
+  );

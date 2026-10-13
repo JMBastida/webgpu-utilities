@@ -15,6 +15,14 @@ export default defineConfig({
           src: 'node_modules/@browsermt/bergamot-translator/worker/**/*',
           dest: 'bergamot/worker',
         },
+        {
+          src: 'node_modules/tesseract.js/dist/worker.min.js',
+          dest: 'tesseract',
+        },
+        {
+          src: 'node_modules/tesseract.js-core/tesseract-core-*.{wasm,js}',
+          dest: 'tesseract-core',
+        },
       ],
     }),
   ],

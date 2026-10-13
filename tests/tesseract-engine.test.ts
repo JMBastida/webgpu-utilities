@@ -95,7 +95,9 @@ describe('TesseractEngine unit tests', () => {
       'eng',
       1,
       expect.objectContaining({
-        cacheMethod: 'refresh',
+        cacheMethod: 'write',
+        workerPath: expect.stringContaining('/tesseract/worker.min.js') as unknown,
+        corePath: expect.stringContaining('/tesseract-core/') as unknown,
         logger: expect.any(Function) as unknown,
       }) as unknown
     );
@@ -112,7 +114,9 @@ describe('TesseractEngine unit tests', () => {
       'spa',
       1,
       expect.objectContaining({
-        cacheMethod: 'refresh',
+        cacheMethod: 'write',
+        workerPath: expect.stringContaining('/tesseract/worker.min.js') as unknown,
+        corePath: expect.stringContaining('/tesseract-core/') as unknown,
         logger: expect.any(Function) as unknown,
       }) as unknown
     );
@@ -145,6 +149,35 @@ describe('TesseractEngine unit tests', () => {
     const result = await engine.process(new ImageData(1, 1));
     expect(result).toEqual({ text: 'OCR text', items: undefined });
     expect(worker.recognize).toHaveBeenCalled();
+  });
+
+  it('preserves line, paragraph and block identity from Tesseract word output', async () => {
+    const line = {};
+    const paragraph = {};
+    const block = {};
+    const word = {
+      text: 'Hello',
+      confidence: 90,
+      bbox: { x0: 10, y0: 20, x1: 55, y1: 35 },
+      line,
+      paragraph,
+      block,
+    };
+    const worker = makeWorker();
+    worker.recognize.mockResolvedValueOnce({ data: { text: 'Hello', words: [word] } });
+    createWorkerMock.mockResolvedValueOnce(worker as unknown as ReturnType<typeof makeWorker>);
+
+    const engine = new TesseractEngine();
+    await engine.load();
+    const result = await engine.process(new ImageData(100, 80));
+
+    expect(result.items?.[0]).toMatchObject({
+      text: 'Hello',
+      lineId: expect.any(String) as unknown,
+      paragraphId: expect.any(String) as unknown,
+      blockId: expect.any(String) as unknown,
+      boundingBox: { x: 10, y: 20, width: 45, height: 15 },
+    });
   });
 
   it('destroys the worker on cleanup', async () => {

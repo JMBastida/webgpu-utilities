@@ -35,6 +35,9 @@ const buildRegistry = (data) => {
     registry[key] = {
       model: {
         name: `${baseUrl}/${files.model.path}`,
+        ...(files.model.uncompressedHash
+          ? { expectedSha256Hash: files.model.uncompressedHash }
+          : {}),
       },
       vocab: {
         name: `${baseUrl}/${files.vocab.path}`,

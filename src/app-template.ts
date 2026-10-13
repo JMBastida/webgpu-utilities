@@ -115,6 +115,9 @@ export const getAppTemplate = (): string => `
               <button id="translate-image-run" class="primary-button" type="button" disabled>
                 Replace and translate
               </button>
+              <button id="translate-image-apply-edits" class="ghost-button" type="button" disabled>
+                Apply text edits
+              </button>
               <button id="translate-image-download" class="ghost-button" type="button" disabled>
                 Download PNG
               </button>
@@ -123,6 +126,7 @@ export const getAppTemplate = (): string => `
               Run OCR to enable image replacement.
             </div>
             <div id="translate-image-error" class="translate-error hidden" role="alert"></div>
+            <div id="translate-image-editor" class="translate-image-editor hidden" aria-label="Replacement text editor"></div>
             <div class="image-compare">
               <div class="preview-card">
                 <div class="preview-label">Original</div>
