@@ -96,31 +96,35 @@ export const getAppTemplate = (): string => `
               <h3 id="translate-image-heading">Replace text in image</h3>
             </div>
             <div class="translate-controls">
-              <div class="translate-select">
-                <label for="translate-image-from">From</label>
-                <select id="translate-image-from"></select>
+              <div class="translate-selectors" role="group" aria-label="Translation settings">
+                <div class="translate-select">
+                  <label for="translate-image-from">From</label>
+                  <select id="translate-image-from"></select>
+                </div>
+                <div class="translate-select">
+                  <label for="translate-image-to">To</label>
+                  <select id="translate-image-to"></select>
+                </div>
+                <div class="translate-select">
+                  <label for="translate-image-quality">Quality</label>
+                  <select id="translate-image-quality">
+                    <option value="fast">Fast</option>
+                    <option value="balanced" selected>Balanced</option>
+                    <option value="high-quality">High quality</option>
+                  </select>
+                </div>
               </div>
-              <div class="translate-select">
-                <label for="translate-image-to">To</label>
-                <select id="translate-image-to"></select>
+              <div class="translate-actions" role="group" aria-label="Replacement actions">
+                <button id="translate-image-run" class="primary-button" type="button" disabled>
+                  Replace and translate
+                </button>
+                <button id="translate-image-apply-edits" class="ghost-button" type="button" disabled>
+                  Apply text edits
+                </button>
+                <button id="translate-image-download" class="ghost-button" type="button" disabled>
+                  Download PNG
+                </button>
               </div>
-              <div class="translate-select">
-                <label for="translate-image-quality">Quality</label>
-                <select id="translate-image-quality">
-                  <option value="fast">Fast</option>
-                  <option value="balanced" selected>Balanced</option>
-                  <option value="high-quality">High quality</option>
-                </select>
-              </div>
-              <button id="translate-image-run" class="primary-button" type="button" disabled>
-                Replace and translate
-              </button>
-              <button id="translate-image-apply-edits" class="ghost-button" type="button" disabled>
-                Apply text edits
-              </button>
-              <button id="translate-image-download" class="ghost-button" type="button" disabled>
-                Download PNG
-              </button>
             </div>
             <div id="translate-image-status" class="translate-status" role="status">
               Run OCR to enable image replacement.
