@@ -203,6 +203,9 @@ export const translateImage = async (
         region.translatedText = manualText?.trim() ?? '';
         return;
       }
+      if (!input.translator) {
+        throw new Error('A translation model is required when replacement text is not supplied.');
+      }
       const response = await input.translator.translate({
         from: input.from,
         to: input.to,

@@ -6,8 +6,8 @@ The OCR page can translate positioned OCR results and render them into a PNG in 
 
 1. Load an image and run OCR with an engine that returns positioned text items.
 2. Choose the source and target language. The source language is preselected from the OCR engine when a mapping is available.
-3. Choose a rendering preset and select **Replace and translate**.
-4. Review the original and translated previews. Edit any region in the text fields and select **Apply text edits** to rerender with your corrections, then download the PNG.
+3. After OCR, the editable fields are available immediately. Choose a rendering preset and select **Replace and translate** to fill them using the local translation model.
+4. Edit any region and select **Apply text edits** to rerender with your corrections, then download the PNG. Manual replacement works if model download fails or translated text does not fit.
 
 The output keeps the original image dimensions. Text is grouped into paragraphs, erased only around OCR boxes, and rendered into those same regions. The local TypeScript inpainting path does not require a paid service or optional native image library.
 
@@ -29,4 +29,4 @@ All presets are local. The algorithm does not reconstruct arbitrary scenery or g
 
 Run `npm test`, `npm run typecheck`, `npm run lint`, and `npm run build`. The `translate-image` module accepts an `ImageData`, OCR items and dimensions, language codes, and an `ITextTranslator`; callers can inject a translator and rendering implementation for deterministic tests.
 
-[Browser evidence](translate-image-browser.png) shows actual Tesseract OCR on a synthetic image, the local replacement/rendering path, and a manual text correction. The screenshot explicitly labels the translator as injected. In the cloud execution environment used for this change, the real Bergamot model request could not reach upstream storage, so browser verification of an actual model download and translation remains outstanding; the UI reports a setup hint and an optional same-origin asset path is documented above.
+[Browser evidence](translate-image-browser.png) shows actual Tesseract OCR on a synthetic image, the local replacement/rendering path, and a manual text correction. The screenshot explicitly labels the translator as injected. In this cloud environment, the real Bergamot request for `https://storage.googleapis.com/moz-fx-translations-data--303e-prod-translations-data/models/en-es/retrain_hr_fix_names_CUAEXUHoQum_cFqh-ZAryw/exported/vocab.enes.spm.gz` rejects in Chromium with `TypeError: Failed to fetch`; no Google HTTP status or response headers are exposed. A direct request to the equivalent Google JSON API media URL fails the same way, and `curl` reports `403 CONNECT tunnel failed` from the environment proxy. The same-origin URL mapping is unit tested, but model assets could not be downloaded from this environment, so serving them locally and running a real model translation were not tested. The UI reports a setup hint and the optional same-origin asset path is documented above.

@@ -89,6 +89,20 @@ describe('translate image region grouping', () => {
     expect(regions[0]!.items).toHaveLength(4);
   });
 
+  it('joins a varied-height line when an intermediate word bridges OCR boxes', () => {
+    const items: OCRItem[] = [
+      { text: 'A', confidence: 0.9, lineId: 'line-1', paragraphId: 'paragraph-1', boundingBox: { x: 0, y: 0, width: 30, height: 20 } },
+      { text: 'B', confidence: 0.9, lineId: 'line-1', paragraphId: 'paragraph-1', boundingBox: { x: 60, y: 4, width: 30, height: 16 } },
+      { text: 'C', confidence: 0.9, lineId: 'line-1', paragraphId: 'paragraph-1', boundingBox: { x: 120, y: 0, width: 30, height: 20 } },
+    ];
+
+    const regions = buildRegions(items, { sourceLang: 'en', scaleX: 1, scaleY: 1 });
+
+    expect(regions).toHaveLength(1);
+    expect(regions[0]!.sourceLines).toEqual(['A B C']);
+    expect(regions[0]!.items).toHaveLength(3);
+  });
+
   it('keeps same-baseline labels in separate Tesseract paragraphs', () => {
     const items: OCRItem[] = [
       { text: 'LEFT', confidence: 0.9, lineId: 'line-left', paragraphId: 'paragraph-left', boundingBox: { x: 20, y: 40, width: 40, height: 12 } },

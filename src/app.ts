@@ -35,6 +35,7 @@ import type {
   TranslateImageOptions,
   TranslateImageOutput,
 } from '@/translate-image/types';
+import { buildRegions } from '@/translate-image/regions';
 
 type Stage = 'idle' | 'loading' | 'processing' | 'complete' | 'error';
 
@@ -227,8 +228,20 @@ export const initApp = (options: AppOptions = {}): AppInstance => {
       translateImageEditor.append(wrapper);
     }
     translateImageEditor.classList.remove('hidden');
-    translateImageApplyEditsButton.disabled = false;
+    translateImageApplyEditsButton.disabled = translateBusy || !editableInput;
   };
+
+  const getEditableRegions = (
+    input: TranslateImageInput
+  ): Array<{ sourceText: string; text: string }> =>
+    buildRegions(input.ocrItems, {
+      sourceLang: input.from,
+      scaleX: input.original.width / input.ocrSize.width,
+      scaleY: input.original.height / input.ocrSize.height,
+    }).map((region) => {
+      const sourceText = region.sourceLines.join('\n').trim();
+      return { sourceText, text: sourceText };
+    });
 
   const resetTranslateImage = (status = 'Run OCR to enable image replacement.'): void => {
     translateTaskGeneration += 1;
@@ -245,12 +258,7 @@ export const initApp = (options: AppOptions = {}): AppInstance => {
   };
 
   const refreshTranslateImageAvailability = (): void => {
-    translateImageRunButton.disabled =
-      translateBusy ||
-      !lastResult?.items?.length ||
-      !originalImageData ||
-      !lastProcessedWidth ||
-      !lastProcessedHeight;
+    translateImageRunButton.disabled = translateBusy || !editableInput;
   };
 
   const getTranslator = async (): Promise<ITextTranslator> => {
@@ -576,6 +584,17 @@ export const initApp = (options: AppOptions = {}): AppInstance => {
           ? 'Ready to replace and translate detected text.'
           : 'No positioned text was detected.'
       );
+      if (result.items?.length && selectedEngineId) {
+        editableInput = {
+          original: imageData,
+          ocrItems: result.items,
+          engineId: selectedEngineId,
+          from: translateImageFrom.value,
+          to: translateImageTo.value,
+          ocrSize: { width: processed.width, height: processed.height },
+        };
+        setTranslationEditor(getEditableRegions(editableInput));
+      }
       refreshTranslateImageAvailability();
 
       output.textContent =
@@ -621,33 +640,49 @@ export const initApp = (options: AppOptions = {}): AppInstance => {
     const taskGeneration = ++translateTaskGeneration;
     clearTranslatedImage();
     const input: TranslateImageInput = {
-      original: originalImageData,
-      ocrItems: lastResult.items,
-      engineId: selectedEngineId,
+      ...editableInput!,
       from: translateImageFrom.value,
       to: translateImageTo.value,
-      ocrSize: { width: lastProcessedWidth, height: lastProcessedHeight },
-      translator: null as unknown as ITextTranslator,
     };
     translateImageRunButton.disabled = true;
     translateBusy = true;
+    translateImageApplyEditsButton.disabled = true;
     translateImageDownloadButton.disabled = true;
     translateImageError.textContent = '';
     translateImageError.classList.add('hidden');
     translateImageStatus.textContent = 'Loading on-device translation model…';
     void (async (): Promise<void> => {
       try {
-        input.translator = await getTranslator();
+        const imageTranslator = await getTranslator();
         if (operationGeneration !== sourceGeneration || taskGeneration !== translateTaskGeneration)
           return;
-        translateImageStatus.textContent = 'Translating and rendering image…';
+        const sourceRegions = getEditableRegions(input);
+        const translatedRegions = await Promise.all(
+          sourceRegions.map(async (region) => ({
+            ...region,
+            text: (
+              await imageTranslator.translate({ from: input.from, to: input.to, text: region.sourceText })
+            ).text,
+          }))
+        );
+        if (operationGeneration !== sourceGeneration || taskGeneration !== translateTaskGeneration)
+          return;
+        setTranslationEditor(translatedRegions);
+        editableInput = { ...input, translator: imageTranslator };
+        translateImageStatus.textContent = 'Rendering translated image…';
         const quality = translateImageQuality.value as TranslateImageOptions['quality'];
-        const response = await translateImage(input, { quality });
+        const response = await translateImage(
+          {
+            ...input,
+            translator: imageTranslator,
+            manualTranslations: translatedRegions.map((region) => region.text),
+          },
+          { quality }
+        );
         if (operationGeneration !== sourceGeneration || taskGeneration !== translateTaskGeneration)
           return;
         setTranslatedImage(response.blob);
-        editableInput = input;
-        setTranslationEditor(response.regionTranslations);
+        if (response.regionTranslations) setTranslationEditor(response.regionTranslations);
         translateImageStatus.textContent = 'Image replacement complete.';
       } catch (error) {
         logError(error);
@@ -659,6 +694,7 @@ export const initApp = (options: AppOptions = {}): AppInstance => {
       } finally {
         if (taskGeneration === translateTaskGeneration) {
           translateBusy = false;
+          translateImageApplyEditsButton.disabled = !editableInput;
           if (operationGeneration === sourceGeneration) refreshTranslateImageAvailability();
         }
       }
@@ -698,7 +734,7 @@ export const initApp = (options: AppOptions = {}): AppInstance => {
       } finally {
         if (taskGeneration === translateTaskGeneration) {
           translateBusy = false;
-          translateImageApplyEditsButton.disabled = false;
+          translateImageApplyEditsButton.disabled = !editableInput;
           refreshTranslateImageAvailability();
         }
       }
@@ -716,7 +752,20 @@ export const initApp = (options: AppOptions = {}): AppInstance => {
   });
 
   const resetImageResultForOptionChange = (): void => {
-    resetTranslateImage('Ready to replace and translate detected text.');
+    translateTaskGeneration += 1;
+    translateBusy = false;
+    clearTranslatedImage();
+    if (editableInput) {
+      editableInput = {
+        ...editableInput,
+        from: translateImageFrom.value,
+        to: translateImageTo.value,
+      };
+    }
+    translateImageError.textContent = '';
+    translateImageError.classList.add('hidden');
+    translateImageStatus.textContent = 'Ready to replace and translate detected text.';
+    translateImageApplyEditsButton.disabled = !editableInput;
     refreshTranslateImageAvailability();
   };
   translateImageFrom.addEventListener('change', resetImageResultForOptionChange);

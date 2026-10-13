@@ -118,7 +118,9 @@ export const fetchBergamotModelAsset = async (
   let buffer = await response.arrayBuffer();
   if (isGzipData(buffer)) buffer = await decompressGzip(buffer);
   if (checksum) {
-    const actual = toHex(await crypto.subtle.digest('SHA-256', buffer));
+    // Normalize the body buffer into this realm before passing it to WebCrypto.
+    const digestInput = new Uint8Array(buffer);
+    const actual = toHex(await crypto.subtle.digest('SHA-256', digestInput));
     if (actual.toLowerCase() !== checksum.toLowerCase()) {
       throw new Error(`The downloaded translation model failed its SHA-256 check: ${assetUrl}`);
     }

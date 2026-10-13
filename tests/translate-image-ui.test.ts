@@ -256,6 +256,122 @@ describe('Translate image UI', () => {
     expect(error.textContent).toContain('VITE_BERGAMOT_MODEL_ASSET_BASE_URL');
   });
 
+  it('allows manual replacement when the translation model cannot load', async () => {
+    document.body.innerHTML = '<div id="app"></div>';
+    const root = document.querySelector<HTMLElement>('#app')!;
+    const translateImageImpl = vi.fn(
+      (): Promise<TranslateImageOutput> =>
+        Promise.resolve({
+          blob: new Blob([new Uint8Array([1])], { type: 'image/png' }),
+          regionTranslations: [{ sourceText: 'Detected', text: 'Manual Spanish' }],
+        })
+    );
+    const app = initApp({
+      root,
+      featureDetector: createSupportedDetector(),
+      imageProcessor: createImageProcessorStub(),
+      ocrManager: {
+        setEngine: vi.fn(),
+        run: vi.fn(() =>
+          Promise.resolve({
+            text: 'Detected',
+            items: [
+              {
+                text: 'Detected',
+                confidence: 0.9,
+                boundingBox: { x: 10, y: 10, width: 40, height: 10 },
+              },
+            ],
+          })
+        ),
+      } as unknown as OCRManager,
+      registerEngines: (factory) => registerTestEngine(factory),
+      createTranslator: () => Promise.reject(new Error('Model storage is blocked')),
+      translateImageImpl,
+    });
+
+    attachFile(app.elements.fileInput, new File([new Uint8Array([1])], 'sample.png'));
+    await app.runOcr();
+
+    const editor = root.querySelector<HTMLTextAreaElement>('#translate-image-edit-0')!;
+    const applyButton = root.querySelector<HTMLButtonElement>('#translate-image-apply-edits')!;
+    expect(editor.value).toBe('Detected');
+    expect(applyButton.disabled).toBe(false);
+    root.querySelector<HTMLButtonElement>('#translate-image-run')!.click();
+    await flushPromises();
+    expect(root.querySelector('#translate-image-error')?.textContent).toContain(
+      'Model storage is blocked'
+    );
+    expect(applyButton.disabled).toBe(false);
+
+    editor.value = 'Manual Spanish';
+    applyButton.click();
+    await flushPromises();
+    expect(translateImageImpl).toHaveBeenCalledTimes(1);
+    expect(translateImageImpl.mock.calls[0]?.[0].manualTranslations).toEqual(['Manual Spanish']);
+    expect(root.querySelector<HTMLButtonElement>('#translate-image-download')?.disabled).toBe(false);
+  });
+
+  it('keeps overflowing translated text editable for a manual correction', async () => {
+    document.body.innerHTML = '<div id="app"></div>';
+    const root = document.querySelector<HTMLElement>('#app')!;
+    const translator: ITextTranslator = {
+      translate: vi.fn(() => Promise.resolve({ text: 'X'.repeat(1000) })),
+      destroy: vi.fn(),
+    };
+    const translateImageImpl = vi
+      .fn<(_input: TranslateImageInput) => Promise<TranslateImageOutput>>()
+      .mockRejectedValueOnce(new Error('Translated text cannot fit in the detected region.'))
+      .mockResolvedValueOnce({
+        blob: new Blob([new Uint8Array([1])], { type: 'image/png' }),
+        regionTranslations: [{ sourceText: 'Detected', text: 'OK' }],
+      });
+    const app = initApp({
+      root,
+      featureDetector: createSupportedDetector(),
+      imageProcessor: createImageProcessorStub(),
+      ocrManager: {
+        setEngine: vi.fn(),
+        run: vi.fn(() =>
+          Promise.resolve({
+            text: 'Detected',
+            items: [
+              {
+                text: 'Detected',
+                confidence: 0.9,
+                boundingBox: { x: 10, y: 10, width: 40, height: 10 },
+              },
+            ],
+          })
+        ),
+      } as unknown as OCRManager,
+      registerEngines: (factory) => registerTestEngine(factory),
+      createTranslator: () => Promise.resolve(translator),
+      translateImageImpl,
+    });
+
+    attachFile(app.elements.fileInput, new File([new Uint8Array([1])], 'sample.png'));
+    await app.runOcr();
+    root.querySelector<HTMLButtonElement>('#translate-image-run')!.click();
+    await flushPromises();
+
+    const editor = root.querySelector<HTMLTextAreaElement>('#translate-image-edit-0')!;
+    const applyButton = root.querySelector<HTMLButtonElement>('#translate-image-apply-edits')!;
+    expect(editor.value).toHaveLength(1000);
+    expect(root.querySelector('#translate-image-error')?.textContent).toContain('cannot fit');
+    expect(applyButton.disabled).toBe(false);
+
+    editor.value = 'OK';
+    applyButton.click();
+    await flushPromises();
+    expect(translateImageImpl).toHaveBeenCalledTimes(2);
+    const correctedInput = translateImageImpl.mock.calls[1]?.[0] as
+      | TranslateImageInput
+      | undefined;
+    expect(correctedInput?.manualTranslations).toEqual(['OK']);
+    expect(root.querySelector<HTMLButtonElement>('#translate-image-download')?.disabled).toBe(false);
+  });
+
   it('retries model initialization after a failed load', async () => {
     document.body.innerHTML = '<div id="app"></div>';
     const root = document.querySelector<HTMLElement>('#app')!;

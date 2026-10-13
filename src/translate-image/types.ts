@@ -30,7 +30,8 @@ export interface TranslateImageInput {
   engineId: string;
   from: string;
   to: string;
-  translator: ITextTranslator;
+  /** Required for translated replacements; manual text edits can run without a model. */
+  translator?: ITextTranslator;
   ocrSize: { width: number; height: number };
   /** Optional edited replacement text aligned with the regions returned by buildRegions. */
   manualTranslations?: string[];

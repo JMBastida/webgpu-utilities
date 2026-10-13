@@ -137,20 +137,58 @@ export const buildRegions = (
   });
 
   const medianHeight = median(tokens.map((token) => token.bbox.height));
-  const sortedTokens = [...tokens].sort((a, b) => a.centerY - b.centerY || a.centerX - b.centerX);
-
   const lines: Line[] = [];
-  for (const token of sortedTokens) {
+  const metadataLines = new Map<string, Token[]>();
+  const geometricTokens: Token[] = [];
+  for (const token of tokens) {
+    if (!token.item.lineId) {
+      geometricTokens.push(token);
+      continue;
+    }
+    const key = JSON.stringify([
+      token.item.blockId ?? '',
+      token.item.paragraphId ?? '',
+      token.item.lineId,
+    ]);
+    const group = metadataLines.get(key) ?? [];
+    group.push(token);
+    metadataLines.set(key, group);
+  }
+
+  const lineGapLimit = Math.max(3.5 * medianHeight, 12);
+  for (const group of metadataLines.values()) {
+    const orderedTokens = [...group].sort((a, b) => a.bbox.x - b.bbox.x);
+    let line: Line | undefined;
+    for (const token of orderedTokens) {
+      if (!line || horizontalGap(token.bbox, line.bbox) > lineGapLimit) {
+        line = {
+          tokens: [token],
+          bbox: token.bbox,
+          centerY: token.centerY,
+          text: '',
+          lineId: token.item.lineId,
+          paragraphId: token.item.paragraphId,
+        };
+        lines.push(line);
+        continue;
+      }
+      line.tokens.push(token);
+      line.bbox = unionBbox(line.bbox, token.bbox);
+      line.centerY = line.bbox.y + line.bbox.height / 2;
+    }
+  }
+
+  const sortedGeometricTokens = geometricTokens.sort(
+    (a, b) => a.centerY - b.centerY || a.centerX - b.centerX
+  );
+  for (const token of sortedGeometricTokens) {
     const candidates = lines.filter(
       (line) =>
-        (token.item.lineId && line.lineId
-          ? token.item.lineId === line.lineId &&
-            horizontalGap(token.bbox, line.bbox) <= Math.max(3.5 * medianHeight, 12)
-          : (!token.item.lineId || !line.lineId) &&
-            (Math.abs(token.centerY - line.centerY) <= 0.8 * medianHeight ||
-              overlapRatio(token.bbox, line.bbox) >= 0.5) &&
-            overlapRatio(token.bbox, line.bbox) >= 0.1 &&
-            horizontalGap(token.bbox, line.bbox) <= Math.max(1.5 * medianHeight, 12))
+        !line.lineId &&
+        (Math.abs(token.centerY - line.centerY) <= 0.8 * medianHeight ||
+          overlapRatio(token.bbox, line.bbox) >= 0.5) &&
+        overlapRatio(token.bbox, line.bbox) >= 0.1 &&
+        horizontalGap(token.bbox, line.bbox) <= Math.max(1.5 * medianHeight, 12)
     );
     if (candidates.length === 0) {
       lines.push({
