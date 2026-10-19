@@ -60,7 +60,7 @@ export class GeminiSolver {
 
   constructor(options: GeminiSolverOptions) {
     this.apiKey = options.apiKey;
-    this.model = options.model ?? 'gemini-2.5-flash';
+    this.model = options.model ?? 'gemini-3.8-flash';
     const rawFetch = options.fetchImpl ?? globalThis.fetch;
     this.fetchImpl = (input: RequestInfo | URL, init?: RequestInit): Promise<Response> =>
       rawFetch(input, init);

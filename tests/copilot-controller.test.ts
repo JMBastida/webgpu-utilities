@@ -30,7 +30,7 @@ describe('CopilotController', () => {
         solveGemini: mockSolve,
         initialConfig: {
           geminiApiKey: 'test-key',
-          geminiModel: 'gemini-2.5-flash',
+          geminiModel: 'gemini-3.8-flash',
           cameraDeviceId: '',
           roi: { x: 0, y: 0, width: 1, height: 1 },
           contextPreset: 'general',

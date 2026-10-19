@@ -38,7 +38,8 @@ export const renderCopilotTemplate = (): string => `
     <div class="field-group">
       <label for="copilot-gemini-model">Gemini Model</label>
       <select id="copilot-gemini-model">
-        <option value="gemini-2.5-flash">Gemini 2.5 Flash (Fastest, Recommended)</option>
+        <option value="gemini-3.8-flash">Gemini 3.8 Flash (Latest, Recommended)</option>
+        <option value="gemini-2.5-flash">Gemini 2.5 Flash</option>
         <option value="gemini-1.5-flash">Gemini 1.5 Flash</option>
       </select>
     </div>

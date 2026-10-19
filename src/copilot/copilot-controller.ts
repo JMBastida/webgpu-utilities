@@ -18,7 +18,7 @@ export interface CopilotCallbacks {
 
 const DEFAULT_CONFIG: CopilotConfig = {
   geminiApiKey: '',
-  geminiModel: 'gemini-2.5-flash',
+  geminiModel: 'gemini-3.8-flash',
   cameraDeviceId: '',
   roi: { x: 0.1, y: 0.1, width: 0.8, height: 0.8 },
   contextPreset: 'general',

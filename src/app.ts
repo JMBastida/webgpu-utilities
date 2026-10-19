@@ -901,7 +901,7 @@ export const initApp = (options: AppOptions = {}): AppInstance => {
           const cfg = copilotController?.getConfig();
           const solver = new GeminiSolver({
             apiKey: cfg?.geminiApiKey ?? '',
-            model: cfg?.geminiModel ?? 'gemini-2.5-flash',
+            model: cfg?.geminiModel ?? 'gemini-3.8-flash',
           });
           return solver.solve(question, contextPrompt);
         },

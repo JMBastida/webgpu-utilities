@@ -45,7 +45,7 @@ Complexity: O(N) time and O(K) space where K is number of departments.
 
     const solver = new GeminiSolver({
       apiKey: 'test-api-key',
-      model: 'gemini-2.5-flash',
+      model: 'gemini-3.8-flash',
       fetchImpl: mockFetch as unknown as typeof fetch,
     });
 
@@ -53,7 +53,7 @@ Complexity: O(N) time and O(K) space where K is number of departments.
     expect(mockFetch).toHaveBeenCalledTimes(1);
     const firstCall = mockFetch.mock.calls[0] as [string, RequestInit];
     const fetchUrl = firstCall[0];
-    expect(fetchUrl).toContain('gemini-2.5-flash:generateContent?key=test-api-key');
+    expect(fetchUrl).toContain('gemini-3.8-flash:generateContent?key=test-api-key');
 
     expect(result.code).toContain('class Solution');
     expect(result.explanation).toContain('Optimal binary search.');

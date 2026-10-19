@@ -50,7 +50,11 @@ export class CopilotUi {
 
   private loadStoredPreferences(): void {
     const savedApiKey = localStorage.getItem(STORAGE_KEYS.apiKey) ?? '';
-    const savedModel = localStorage.getItem(STORAGE_KEYS.model) ?? 'gemini-2.5-flash';
+    let savedModel = localStorage.getItem(STORAGE_KEYS.model) ?? 'gemini-3.8-flash';
+    if (savedModel === 'gemini-2.5-flash') {
+      savedModel = 'gemini-3.8-flash';
+      localStorage.setItem(STORAGE_KEYS.model, savedModel);
+    }
     const savedPreset = (localStorage.getItem(STORAGE_KEYS.preset) as ContextPreset) ?? 'sql';
     const savedContext = localStorage.getItem(STORAGE_KEYS.context) ?? '';
     const savedInterval = Number(localStorage.getItem(STORAGE_KEYS.interval)) || 3;
@@ -150,7 +154,7 @@ export class CopilotUi {
           this.container.querySelector<HTMLInputElement>('#copilot-api-key')?.value.trim() ?? '';
         const model =
           this.container.querySelector<HTMLSelectElement>('#copilot-gemini-model')?.value ??
-          'gemini-2.5-flash';
+          'gemini-3.8-flash';
         const customContext =
           this.container
             .querySelector<HTMLTextAreaElement>('#copilot-custom-context')
