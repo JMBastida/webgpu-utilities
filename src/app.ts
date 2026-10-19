@@ -20,6 +20,8 @@ import { createImageSourceController } from '@/image-sources';
 import type { ITextTranslator } from '@/types/translation';
 import { BERGAMOT_LANGUAGES, DEFAULT_TRANSLATION_TO } from '@/utils/translation-languages';
 import { mapOcrLanguageToBergamot } from '@/utils/ocr-language-to-bergamot';
+import type { CopilotUi } from '@/copilot/copilot-ui';
+import type { CopilotController } from '@/copilot/copilot-controller';
 
 const formatErrorWithCauses = (error: unknown): string => {
   const messages: string[] = [];
@@ -853,6 +855,101 @@ export const initApp = (options: AppOptions = {}): AppInstance => {
       drawBoxes(lastResult.items, lastProcessedWidth, lastProcessedHeight);
     }
   });
+
+  // Mode Switcher (Document OCR vs Screen Copilot)
+  const navModeOcr = root.querySelector<HTMLButtonElement>('#nav-mode-ocr');
+  const navModeCopilot = root.querySelector<HTMLButtonElement>('#nav-mode-copilot');
+  const ocrViewContainer = root.querySelector<HTMLElement>('#ocr-view-container');
+  const copilotViewContainer = root.querySelector<HTMLElement>('#copilot-view-container');
+
+  let copilotUi: CopilotUi | null = null;
+  let copilotController: CopilotController | null = null;
+
+  const initCopilot = async (): Promise<void> => {
+    if (copilotUi) return;
+    const copilotContainer = root.querySelector<HTMLElement>('#copilot-container');
+    const copilotVideo = root.querySelector<HTMLVideoElement>('#copilot-video');
+    if (!copilotContainer || !copilotVideo) return;
+
+    const { VideoCaptureManager } = await import('@/copilot/video-capture-manager');
+    const { GeminiSolver } = await import('@/copilot/gemini-client');
+    const { CopilotController } = await import('@/copilot/copilot-controller');
+    const { CopilotUi } = await import('@/copilot/copilot-ui');
+
+    const videoManager = new VideoCaptureManager(copilotVideo);
+
+    copilotController = new CopilotController(
+      {
+        captureFrame: () => videoManager.captureFrame(),
+        runOcr: async (canvas: HTMLCanvasElement): Promise<string> => {
+          if (!engineReady || !activeEngineId) {
+            await switchEngine(selectedEngineId || 'tesseract', false);
+          }
+          const ctx = canvas.getContext('2d');
+          const imageData = ctx
+            ? ctx.getImageData(0, 0, canvas.width, canvas.height)
+            : new ImageData(Math.max(1, canvas.width), Math.max(1, canvas.height));
+          const resized = imageProcessor.resize(imageData, 2000);
+          const processed = imageProcessor.preprocess(resized);
+          const result = await ocrManager.run(processed);
+          return result.text || '';
+        },
+        solveGemini: async (
+          question: string,
+          contextPrompt: string
+        ): Promise<import('@/copilot/types').SolutionResult> => {
+          const cfg = copilotController?.getConfig();
+          const solver = new GeminiSolver({
+            apiKey: cfg?.geminiApiKey ?? '',
+            model: cfg?.geminiModel ?? 'gemini-2.5-flash',
+          });
+          return solver.solve(question, contextPrompt);
+        },
+      },
+      {
+        onStateChange: (state, message): void => {
+          copilotUi?.updateStatus(state, message);
+        },
+        onQuestionDetected: (text): void => {
+          copilotUi?.updateDetectedQuestion(text);
+        },
+        onSolutionReady: (solution): void => {
+          copilotUi?.displaySolution(solution);
+        },
+        onError: (err): void => {
+          copilotUi?.updateStatus('ERROR', err.message);
+        },
+      }
+    );
+
+    copilotUi = new CopilotUi(copilotContainer, copilotController, videoManager);
+    await copilotUi.init();
+    copilotController.start();
+  };
+
+  if (navModeOcr && navModeCopilot && ocrViewContainer && copilotViewContainer) {
+    navModeOcr.addEventListener('click', () => {
+      navModeOcr.classList.add('is-active');
+      navModeOcr.setAttribute('aria-selected', 'true');
+      navModeCopilot.classList.remove('is-active');
+      navModeCopilot.setAttribute('aria-selected', 'false');
+      ocrViewContainer.classList.remove('hidden');
+      copilotViewContainer.classList.add('hidden');
+      copilotController?.stop();
+    });
+
+    navModeCopilot.addEventListener('click', () => {
+      navModeCopilot.classList.add('is-active');
+      navModeCopilot.setAttribute('aria-selected', 'true');
+      navModeOcr.classList.remove('is-active');
+      navModeOcr.setAttribute('aria-selected', 'false');
+      ocrViewContainer.classList.add('hidden');
+      copilotViewContainer.classList.remove('hidden');
+      void initCopilot().then(() => {
+        copilotController?.start();
+      });
+    });
+  }
 
   return {
     runOcr,

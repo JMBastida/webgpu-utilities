@@ -1,15 +1,26 @@
+import { renderCopilotTemplate } from './copilot/copilot-template';
+
 export const getAppTemplate = (): string => `
   <div class="page">
     <header class="hero">
-      <div>
-        <p class="eyebrow">Multi-Engine OCR</p>
-        <h1>Extract text directly in your browser.</h1>
+      <div class="hero-content">
+        <p class="eyebrow">Multi-Engine OCR & Screen Copilot</p>
+        <h1>Extract & Solve directly in your browser.</h1>
         <p class="subtitle">
-          Privacy-first OCR powered by modern browser technologies like WebAssembly and WebGPU.
+          Privacy-first local OCR and autonomous screen-monitoring assistant powered by Gemini.
         </p>
       </div>
+      <nav class="app-mode-nav" role="tablist" aria-label="Application mode">
+        <button id="nav-mode-ocr" class="mode-tab is-active" type="button" role="tab" aria-selected="true">
+          📄 Document OCR
+        </button>
+        <button id="nav-mode-copilot" class="mode-tab" type="button" role="tab" aria-selected="false">
+          ⚡ Screen Copilot
+        </button>
+      </nav>
     </header>
 
+    <div id="ocr-view-container">
     <main class="main-grid">
       <section class="panel upload-panel">
         <h2>1. Settings & Source</h2>
@@ -150,6 +161,11 @@ export const getAppTemplate = (): string => `
       </div>
       </div>
     </main>
+    </div>
+
+    <div id="copilot-view-container" class="hidden">
+      ${renderCopilotTemplate()}
+    </div>
 
     <section id="error-panel" class="panel error-panel hidden">
       <div class="error-header">
