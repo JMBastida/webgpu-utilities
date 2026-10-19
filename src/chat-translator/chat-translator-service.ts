@@ -151,7 +151,7 @@ CRITICAL RULES:
         text: maskedText,
       });
 
-      const unmasked = unmaskBrackets(res.translatedText.trim(), tokens);
+      const unmasked = unmaskBrackets((res.text || '').trim(), tokens);
       const fullTranslated = parsed.prefix ? `${parsed.prefix} ${unmasked}` : unmasked;
 
       results.push({

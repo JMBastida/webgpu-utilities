@@ -15,17 +15,19 @@ export class ScreenCaptureManager {
     }
 
     const stream = await navigator.mediaDevices.getDisplayMedia({
-      video: {
-        cursor: 'never' as unknown as boolean,
-      },
+      video: true,
       audio: false,
     });
 
     this.currentStream = stream;
     this.videoElement.srcObject = stream;
-    const playPromise = this.videoElement.play();
-    if (playPromise && typeof playPromise.catch === 'function') {
-      await playPromise.catch(() => {});
+    try {
+      const playPromise = this.videoElement.play();
+      if (playPromise !== undefined) {
+        await playPromise;
+      }
+    } catch {
+      // Ignore play rejection in headless/JSDOM or if autoplay is restricted
     }
 
     const track = stream.getVideoTracks()[0];

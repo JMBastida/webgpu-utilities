@@ -1,3 +1,5 @@
+export type { NormalizedRoi } from '@/copilot/types';
+
 export interface ParsedChatLine {
   raw: string;
   prefix?: string;

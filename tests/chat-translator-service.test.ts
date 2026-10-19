@@ -43,7 +43,7 @@ describe('ChatTranslatorService', () => {
   it('translates via Bergamot with bracket token masking', async () => {
     const mockBergamot: ITextTranslator = {
       translate: vi.fn().mockResolvedValue({
-        translatedText: 'I found __BRK_0__ here',
+        text: 'I found __BRK_0__ here',
       }),
     } as unknown as ITextTranslator;
 

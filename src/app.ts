@@ -22,6 +22,8 @@ import { BERGAMOT_LANGUAGES, DEFAULT_TRANSLATION_TO } from '@/utils/translation-
 import { mapOcrLanguageToBergamot } from '@/utils/ocr-language-to-bergamot';
 import type { CopilotUi } from '@/copilot/copilot-ui';
 import type { CopilotController } from '@/copilot/copilot-controller';
+import type { ChatTranslatorUi } from '@/chat-translator/chat-translator-ui';
+import type { ChatTranslatorController } from '@/chat-translator/chat-translator-controller';
 
 const formatErrorWithCauses = (error: unknown): string => {
   const messages: string[] = [];
@@ -856,14 +858,18 @@ export const initApp = (options: AppOptions = {}): AppInstance => {
     }
   });
 
-  // Mode Switcher (Document OCR vs Screen Copilot)
+  // Mode Switcher (Document OCR vs Screen Copilot vs Game Chat Translator)
   const navModeOcr = root.querySelector<HTMLButtonElement>('#nav-mode-ocr');
   const navModeCopilot = root.querySelector<HTMLButtonElement>('#nav-mode-copilot');
+  const navModeChat = root.querySelector<HTMLButtonElement>('#nav-mode-chat');
   const ocrViewContainer = root.querySelector<HTMLElement>('#ocr-view-container');
   const copilotViewContainer = root.querySelector<HTMLElement>('#copilot-view-container');
+  const chatViewContainer = root.querySelector<HTMLElement>('#chat-view-container');
 
   let copilotUi: CopilotUi | null = null;
   let copilotController: CopilotController | null = null;
+  let chatUi: ChatTranslatorUi | null = null;
+  let chatController: ChatTranslatorController | null = null;
 
   const initCopilot = async (): Promise<void> => {
     if (copilotUi) return;
@@ -927,28 +933,134 @@ export const initApp = (options: AppOptions = {}): AppInstance => {
     copilotController.start();
   };
 
-  if (navModeOcr && navModeCopilot && ocrViewContainer && copilotViewContainer) {
-    navModeOcr.addEventListener('click', () => {
-      navModeOcr.classList.add('is-active');
-      navModeOcr.setAttribute('aria-selected', 'true');
-      navModeCopilot.classList.remove('is-active');
-      navModeCopilot.setAttribute('aria-selected', 'false');
-      ocrViewContainer.classList.remove('hidden');
-      copilotViewContainer.classList.add('hidden');
-      copilotController?.stop();
+  const initChatTranslator = async (): Promise<void> => {
+    if (chatUi) return;
+    const chatContainer = root.querySelector<HTMLElement>('#chat-translator-container');
+    const chatVideo = root.querySelector<HTMLVideoElement>('#chat-video');
+    if (!chatContainer || !chatVideo) return;
+
+    const { ScreenCaptureManager } = await import('@/chat-translator/screen-capture-manager');
+    const { ChatTranslatorService } = await import('@/chat-translator/chat-translator-service');
+    const { ChatTranslatorController } = await import(
+      '@/chat-translator/chat-translator-controller'
+    );
+    const { ChatTranslatorUi } = await import('@/chat-translator/chat-translator-ui');
+
+    const screenManager = new ScreenCaptureManager(chatVideo);
+
+    const getBergamot = async (): Promise<ITextTranslator> => {
+      if (!translator) {
+        if (!translatorPromise) translatorPromise = createTranslator();
+        translator = await translatorPromise;
+      }
+      return translator;
+    };
+
+    const apiKey =
+      localStorage.getItem('chat_gemini_api_key') ||
+      localStorage.getItem('copilot_gemini_api_key') ||
+      '';
+    const model = localStorage.getItem('chat_gemini_model') || 'gemini-3.8-flash';
+
+    const chatService = new ChatTranslatorService({
+      geminiApiKey: apiKey,
+      geminiModel: model,
     });
 
-    navModeCopilot.addEventListener('click', () => {
-      navModeCopilot.classList.add('is-active');
-      navModeCopilot.setAttribute('aria-selected', 'true');
-      navModeOcr.classList.remove('is-active');
-      navModeOcr.setAttribute('aria-selected', 'false');
-      ocrViewContainer.classList.add('hidden');
-      copilotViewContainer.classList.remove('hidden');
+    chatController = new ChatTranslatorController(
+      {
+        captureFrame: () => screenManager.captureFrame(),
+        getRoi: () => (chatUi ? chatUi.getRoi() : { x: 0, y: 0.6, width: 0.5, height: 0.4 }),
+        runOcr: async (canvas: HTMLCanvasElement): Promise<string> => {
+          if (!engineReady || !activeEngineId) {
+            await switchEngine(selectedEngineId || 'tesseract', false);
+          }
+          const ctx = canvas.getContext('2d');
+          const imageData = ctx
+            ? ctx.getImageData(0, 0, canvas.width, canvas.height)
+            : new ImageData(Math.max(1, canvas.width), Math.max(1, canvas.height));
+          const resized = imageProcessor.resize(imageData, 2000);
+          const processed = imageProcessor.preprocess(resized);
+          const result = await ocrManager.run(processed);
+          chatUi?.setRawOcrPreview(result.text || '');
+          return result.text || '';
+        },
+        translateLines: async (
+          lines,
+          engine
+        ): Promise<import('@/chat-translator/types').TranslatedChatLine[]> => {
+          if (engine === 'bergamot') {
+            const bergamot = await getBergamot();
+            chatService.updateConfig(undefined, undefined, bergamot);
+          } else {
+            const currentKey =
+              localStorage.getItem('chat_gemini_api_key') ||
+              localStorage.getItem('copilot_gemini_api_key') ||
+              '';
+            const currentModel =
+              localStorage.getItem('chat_gemini_model') || 'gemini-3.8-flash';
+            chatService.updateConfig(currentKey, currentModel);
+          }
+          return chatService.translateLines(lines, engine);
+        },
+      },
+      {
+        onStateChange: (state, message): void => {
+          chatUi?.updateStatus(state, message);
+        },
+        onNewChatLines: (lines): void => {
+          chatUi?.appendTranslatedLines(lines);
+        },
+        onError: (err): void => {
+          chatUi?.updateStatus('ERROR', err.message);
+        },
+      }
+    );
+
+    chatUi = new ChatTranslatorUi(chatContainer, chatController, screenManager);
+    chatUi.onEngineChange((engine) => {
+      if (engine === 'bergamot') {
+        void getBergamot();
+      }
+    });
+
+    chatUi.init();
+  };
+
+  const setTab = (activeTab: 'ocr' | 'copilot' | 'chat'): void => {
+    navModeOcr?.classList.toggle('is-active', activeTab === 'ocr');
+    navModeOcr?.setAttribute('aria-selected', activeTab === 'ocr' ? 'true' : 'false');
+
+    navModeCopilot?.classList.toggle('is-active', activeTab === 'copilot');
+    navModeCopilot?.setAttribute('aria-selected', activeTab === 'copilot' ? 'true' : 'false');
+
+    navModeChat?.classList.toggle('is-active', activeTab === 'chat');
+    navModeChat?.setAttribute('aria-selected', activeTab === 'chat' ? 'true' : 'false');
+
+    ocrViewContainer?.classList.toggle('hidden', activeTab !== 'ocr');
+    copilotViewContainer?.classList.toggle('hidden', activeTab !== 'copilot');
+    chatViewContainer?.classList.toggle('hidden', activeTab !== 'chat');
+
+    if (activeTab !== 'copilot') {
+      copilotController?.stop();
+    }
+    if (activeTab !== 'chat') {
+      chatController?.stop();
+    }
+
+    if (activeTab === 'copilot') {
       void initCopilot().then(() => {
         copilotController?.start();
       });
-    });
+    } else if (activeTab === 'chat') {
+      void initChatTranslator();
+    }
+  };
+
+  if (navModeOcr && navModeCopilot && navModeChat) {
+    navModeOcr.addEventListener('click', () => setTab('ocr'));
+    navModeCopilot.addEventListener('click', () => setTab('copilot'));
+    navModeChat.addEventListener('click', () => setTab('chat'));
   }
 
   return {

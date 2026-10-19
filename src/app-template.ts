@@ -1,4 +1,5 @@
 import { renderCopilotTemplate } from './copilot/copilot-template';
+import { renderChatTranslatorTemplate } from './chat-translator/chat-translator-template';
 
 export const getAppTemplate = (): string => `
   <div class="page">
@@ -16,6 +17,9 @@ export const getAppTemplate = (): string => `
         </button>
         <button id="nav-mode-copilot" class="mode-tab" type="button" role="tab" aria-selected="false">
           ⚡ Screen Copilot
+        </button>
+        <button id="nav-mode-chat" class="mode-tab" type="button" role="tab" aria-selected="false">
+          🎮 Game Chat Translator
         </button>
       </nav>
     </header>
@@ -165,6 +169,10 @@ export const getAppTemplate = (): string => `
 
     <div id="copilot-view-container" class="hidden">
       ${renderCopilotTemplate()}
+    </div>
+
+    <div id="chat-view-container" class="hidden">
+      ${renderChatTranslatorTemplate()}
     </div>
 
     <section id="error-panel" class="panel error-panel hidden">
