@@ -1,6 +1,6 @@
 # Autonomous Screen-Watcher & Interview Copilot Implementation Plan
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [x]`) syntax for tracking.
 
 **Goal:** Build an autonomous, hands-free "Screen Copilot" mode for Computer B that monitors an external camera pointed at Computer A's screen, extracts question/code text via OCR within a user-defined ROI, detects new questions via similarity debouncing, and automatically solves them with Google Gemini Flash.
 
@@ -46,7 +46,7 @@
   export function cropCanvasToRoi(sourceCanvas: HTMLCanvasElement | OffscreenCanvas, roi: NormalizedRoi): HTMLCanvasElement;
   ```
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 Create `tests/copilot-roi.test.ts`:
 ```typescript
@@ -91,12 +91,12 @@ describe('ROI Selector', () => {
 });
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `npx vitest run tests/copilot-roi.test.ts`
 Expected: FAIL ("Cannot find module '../src/copilot/roi-selector'")
 
-- [ ] **Step 3: Write minimal implementation**
+- [x] **Step 3: Write minimal implementation**
 
 Create `src/copilot/types.ts`:
 ```typescript
@@ -195,12 +195,12 @@ export const cropCanvasToRoi = (
 };
 ```
 
-- [ ] **Step 4: Run test to verify it passes**
+- [x] **Step 4: Run test to verify it passes**
 
 Run: `npx vitest run tests/copilot-roi.test.ts`
 Expected: PASS
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/copilot/types.ts src/copilot/roi-selector.ts tests/copilot-roi.test.ts
@@ -236,7 +236,7 @@ git commit -m "feat(copilot): add types and ROI coordinate cropping utilities"
   }
   ```
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 Create `tests/copilot-change-detector.test.ts`:
 ```typescript
@@ -294,12 +294,12 @@ describe('ChangeDetector', () => {
 });
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `npx vitest run tests/copilot-change-detector.test.ts`
 Expected: FAIL ("Cannot find module '../src/copilot/change-detector'")
 
-- [ ] **Step 3: Write minimal implementation**
+- [x] **Step 3: Write minimal implementation**
 
 Create `src/copilot/change-detector.ts`:
 ```typescript
@@ -392,12 +392,12 @@ export class ChangeDetector {
 }
 ```
 
-- [ ] **Step 4: Run test to verify it passes**
+- [x] **Step 4: Run test to verify it passes**
 
 Run: `npx vitest run tests/copilot-change-detector.test.ts`
 Expected: PASS
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/copilot/change-detector.ts tests/copilot-change-detector.test.ts
@@ -436,7 +436,7 @@ git commit -m "feat(copilot): add change detector with text normalization and si
   }
   ```
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 Create `tests/copilot-gemini.test.ts`:
 ```typescript
@@ -519,12 +519,12 @@ Complexity: O(N) time and O(K) space where K is number of departments.
 });
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `npx vitest run tests/copilot-gemini.test.ts`
 Expected: FAIL ("Cannot find module '../src/copilot/gemini-client'")
 
-- [ ] **Step 3: Write minimal implementation**
+- [x] **Step 3: Write minimal implementation**
 
 Create `src/copilot/gemini-client.ts`:
 ```typescript
@@ -645,12 +645,12 @@ ${question}`;
 }
 ```
 
-- [ ] **Step 4: Run test to verify it passes**
+- [x] **Step 4: Run test to verify it passes**
 
 Run: `npx vitest run tests/copilot-gemini.test.ts`
 Expected: PASS
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/copilot/gemini-client.ts tests/copilot-gemini.test.ts
@@ -683,7 +683,7 @@ git commit -m "feat(copilot): add Google Gemini client with structured parsing a
   }
   ```
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 Create `tests/copilot-video.test.ts`:
 ```typescript
@@ -726,12 +726,12 @@ describe('VideoCaptureManager', () => {
 });
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `npx vitest run tests/copilot-video.test.ts`
 Expected: FAIL ("Cannot find module '../src/copilot/video-capture-manager'")
 
-- [ ] **Step 3: Write minimal implementation**
+- [x] **Step 3: Write minimal implementation**
 
 Create `src/copilot/video-capture-manager.ts`:
 ```typescript
@@ -816,12 +816,12 @@ export interface VideoDeviceOption {
 }
 ```
 
-- [ ] **Step 4: Run test to verify it passes**
+- [x] **Step 4: Run test to verify it passes**
 
 Run: `npx vitest run tests/copilot-video.test.ts`
 Expected: PASS
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/copilot/video-capture-manager.ts src/copilot/types.ts tests/copilot-video.test.ts
@@ -856,7 +856,7 @@ git commit -m "feat(copilot): add video capture manager for camera stream and fr
   }
   ```
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 Create `tests/copilot-controller.test.ts`:
 ```typescript
@@ -927,12 +927,12 @@ describe('CopilotController', () => {
 });
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `npx vitest run tests/copilot-controller.test.ts`
 Expected: FAIL ("Cannot find module '../src/copilot/copilot-controller'")
 
-- [ ] **Step 3: Write minimal implementation**
+- [x] **Step 3: Write minimal implementation**
 
 Create `src/copilot/copilot-controller.ts`:
 ```typescript
@@ -1090,12 +1090,12 @@ export class CopilotController {
 }
 ```
 
-- [ ] **Step 4: Run test to verify it passes**
+- [x] **Step 4: Run test to verify it passes**
 
 Run: `npx vitest run tests/copilot-controller.test.ts`
 Expected: PASS
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/copilot/copilot-controller.ts tests/copilot-controller.test.ts
@@ -1138,7 +1138,7 @@ git commit -m "feat(copilot): add autonomous orchestrator controller with stabil
   export function initCopilotUi(container: HTMLElement, controller: CopilotController): void;
   ```
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 Create `tests/copilot-ui.test.ts`:
 ```typescript
@@ -1163,12 +1163,12 @@ describe('Copilot UI Template & Rendering', () => {
 });
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `npx vitest run tests/copilot-ui.test.ts`
 Expected: FAIL ("Cannot find module '../src/copilot/copilot-template'")
 
-- [ ] **Step 3: Write implementation**
+- [x] **Step 3: Write implementation**
 
 Create `src/copilot/copilot-template.ts`:
 ```typescript
@@ -1316,12 +1316,12 @@ Add styles for `.copilot-container`, `.copilot-status-pill`, `.copilot-roi-box`,
 Modify `src/app.ts`:
 Wire tab navigation between the existing Document OCR view and the new Screen Copilot view.
 
-- [ ] **Step 4: Run test to verify it passes**
+- [x] **Step 4: Run test to verify it passes**
 
 Run: `npx vitest run tests/copilot-ui.test.ts`
 Expected: PASS
 
-- [ ] **Step 5: Run full test suite, typecheck, and lint**
+- [x] **Step 5: Run full test suite, typecheck, and lint**
 
 Run:
 ```bash
@@ -1331,7 +1331,7 @@ npm run lint
 ```
 Expected: All tests pass, 0 type errors, 0 lint errors.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add src/copilot/ tests/copilot-ui.test.ts src/app-template.ts src/app.ts src/style.css
