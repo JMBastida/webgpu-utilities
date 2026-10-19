@@ -75,4 +75,23 @@ Complexity: O(N) time and O(K) space where K is number of departments.
 
     await expect(solver.solve('query', 'context')).rejects.toThrow(/Gemini API Error 401/);
   });
+
+  it('does not invoke fetch with illegal invocation (ensures window/global context)', async () => {
+    const fakeNativeFetch = function (this: unknown): Promise<Response> {
+      if (this !== undefined && this !== globalThis) {
+        throw new TypeError("Failed to execute 'fetch' on 'Window': Illegal invocation");
+      }
+      return Promise.resolve({
+        ok: true,
+        json: () => Promise.resolve({ candidates: [] }),
+      } as unknown as Response);
+    };
+
+    const solver = new GeminiSolver({
+      apiKey: 'test-key',
+      fetchImpl: fakeNativeFetch as unknown as typeof fetch,
+    });
+
+    await expect(solver.solve('query', 'context')).resolves.toBeDefined();
+  });
 });

@@ -61,7 +61,9 @@ export class GeminiSolver {
   constructor(options: GeminiSolverOptions) {
     this.apiKey = options.apiKey;
     this.model = options.model ?? 'gemini-2.5-flash';
-    this.fetchImpl = options.fetchImpl ?? fetch;
+    const rawFetch = options.fetchImpl ?? globalThis.fetch;
+    this.fetchImpl = (input: RequestInfo | URL, init?: RequestInit): Promise<Response> =>
+      rawFetch(input, init);
   }
 
   async solve(question: string, contextPrompt: string): Promise<SolutionResult> {
